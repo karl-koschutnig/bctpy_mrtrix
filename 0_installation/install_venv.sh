@@ -30,11 +30,11 @@ uv venv "$VENV_DIR" --python "$PYTHON_BIN"
 uv pip install --python "$VENV_DIR/bin/python" \
   numpy \
   pandas \
+  pyarrow \
   bctpy \
   scipy \
   matplotlib \
   seaborn \
-  umap-learn \
   scikit-learn
 
 echo "✓ Virtual environment created at: $VENV_DIR"

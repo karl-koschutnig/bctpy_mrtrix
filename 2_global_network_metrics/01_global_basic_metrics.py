@@ -71,9 +71,15 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 
-from umap import UMAP
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+
+# UMAP will be imported lazily if needed (can be slow due to Numba JIT compilation)
+try:
+    from umap import UMAP
+    UMAP_AVAILABLE = True
+except (ImportError, RuntimeError):
+    UMAP_AVAILABLE = False
 
 # ======================== CONFIGURATION ========================
 DATA_DIR = Path("/data/local/129_PK01/derivatives/dsistudio_connectomics/connectivity")
@@ -100,32 +106,34 @@ print(f"Loaded {len(participants_df)} participant records")
 # CONFIGURATION - EDIT THIS SECTION FOR YOUR DATA
 # ============================================================================
 
-CONFIG = {
+# Default configuration (can be overridden by injected CONFIG from pipeline)
+DEFAULT_CONFIG = {
     # ---- DATA LOCATIONS ----
     "data_dir": Path("/data/local/129_PK01/derivatives/dsistudio_connectomics/connectivity"),
     "metadata_file": Path("/data/local/129_PK01/derivatives/bct/participants_5groups.tsv"),
     "output_dir": Path("/data/local/129_PK01/derivatives/bct/global_metrics"),
     
     # ---- DATA STRUCTURE ----
-    "n_nodes": 246,  # Number of brain regions in your atlas
+    "n_nodes": None,  # Auto-detected if not provided
     "atlas_name": "Brainnectome",  # Name of your atlas
     
     # ---- FILE NAMING PATTERN ----
     # How to find connectivity files. Example patterns:
-    # "{subject}_ses-{session}*/tracks_1000k_streamline/by_atlas/{atlas}/*.connectivity.mat"
+    # "{subject}_ses-{session}*/tracks_*/by_atlas/{atlas}/*.connectivity.mat"
     # "connectivity/{subject}/ses-{session}/connectogram.npy"
-    "file_pattern": "{subject}_ses-{session}*/tracks_1000k_streamline/by_atlas/{atlas}/*.connectivity.mat",
+    "file_pattern": "{subject}_ses-{session}*/tracks_*/by_atlas/{atlas}/*.connectivity.mat",
     
     # ---- PARTICIPANTS METADATA ----
     # Columns expected in metadata file:
     "subject_col": "participant_id",
-    "session_col": "session",
+    "session_col": "session_id",
     "group_col": "group",
     "sex_col": "sex",
     
     # ---- PROCESSING OPTIONS ----
     "binarize": False,  # Convert to binary (0/1) connectivity?
     "weight_type": "weighted",  # 'weighted' or 'binary'
+    "use_umap": False,  # Use UMAP for dimensionality reduction (slower, requires numba)
     "umap_n_neighbors": 15,
     "umap_min_dist": 0.1,
     "umap_metric": "euclidean",
@@ -133,47 +141,93 @@ CONFIG = {
     "exclude_metrics": [],  # list of metric keys to skip
 }
 
-# ============================================================================
-# INITIALIZE
-# ============================================================================
+# Merge with injected CONFIG (if provided by pipeline_execution.py)
+if 'CONFIG' in globals():
+    # If CONFIG was injected, update it with defaults for missing keys
+    for key, value in DEFAULT_CONFIG.items():
+        if key not in CONFIG:
+            CONFIG[key] = value
+else:
+    # Otherwise use default config
+    CONFIG = DEFAULT_CONFIG.copy()
 
-# Create output directory
-CONFIG["output_dir"].mkdir(parents=True, exist_ok=True)
-
-print("="*75)
-print("GLOBAL NETWORK METRICS ANALYSIS")
-print("="*75)
-print(f"Data directory:      {CONFIG['data_dir']}")
-print(f"Metadata file:       {CONFIG['metadata_file']}")
-print(f"Output directory:    {CONFIG['output_dir']}")
-print(f"Atlas:               {CONFIG['atlas_name']} ({CONFIG['n_nodes']} nodes)")
-print("="*75)
-print()
-
-# ============================================================================
-# LOAD DATA
-# ============================================================================
-
-print("Loading participant metadata...")
-if not CONFIG["metadata_file"].exists():
-    raise FileNotFoundError(f"Metadata file not found: {CONFIG['metadata_file']}")
-
-metadata = pd.read_csv(CONFIG["metadata_file"], sep='\t')
-print(f"✓ Loaded {len(metadata)} records")
-print(f"  Columns: {list(metadata.columns)}")
-print()
+# Ensure paths are Path objects
+CONFIG["data_dir"] = Path(CONFIG["data_dir"])
+CONFIG["metadata_file"] = Path(CONFIG["metadata_file"])
+CONFIG["output_dir"] = Path(CONFIG["output_dir"])
 
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+def auto_detect_n_nodes() -> int:
+    """
+    Auto-detect n_nodes by loading the first available connectivity matrix.
+    
+    RETURNS:
+        int: Number of nodes detected from the first available file
+    
+    RAISES:
+        ValueError: If no connectivity files can be found or loaded
+    """
+    print("Auto-detecting n_nodes from connectivity matrices...")
+    metadata = pd.read_csv(CONFIG["metadata_file"], sep='\t')
+    
+    for idx, row in metadata.iterrows():
+        subject = row[CONFIG["subject_col"]]
+        session = row[CONFIG["session_col"]]
+        
+        # Ensure subject has 'sub-' prefix
+        if not subject.startswith('sub-'):
+            subject = f'sub-{subject}'
+        
+        # Handle session - check if it already has 'ses-' prefix
+        if isinstance(session, str) and session.startswith('ses-'):
+            session_num = session.replace('ses-', '')
+        else:
+            session_num = str(session)
+        
+        # Try the pattern with the session number (without 'ses-' prefix, will be added by pattern)
+        pattern = CONFIG["file_pattern"].format(
+            subject=subject,
+            session=session_num,
+            atlas=CONFIG["atlas_name"]
+        )
+        
+        matches = list(CONFIG["data_dir"].glob(pattern))
+        if matches:
+            try:
+                filepath = matches[0]
+                if filepath.suffix == '.mat':
+                    mat_data = loadmat(filepath)
+                    if 'connectivity' in mat_data:
+                        A = mat_data['connectivity']
+                    else:
+                        keys = [k for k in mat_data.keys() if not k.startswith('__')]
+                        A = mat_data[keys[0]] if keys else None
+                elif filepath.suffix == '.npy':
+                    A = np.load(filepath)
+                else:
+                    continue
+                
+                if A is not None:
+                    A = np.array(A, dtype=float)
+                    n_nodes = A.shape[0]
+                    print(f"✓ Detected n_nodes = {n_nodes} from {filepath.name}")
+                    return n_nodes
+            except Exception as e:
+                continue
+    
+    raise ValueError(f"Could not auto-detect n_nodes: no valid connectivity matrices found in {CONFIG['data_dir']} with pattern {CONFIG['file_pattern']}")
+
 
 def load_connectivity_matrix(subject: str, session: str) -> np.ndarray:
     """
     Load connectivity matrix for a subject and session.
     
     PARAMETERS:
-        subject (str): Subject identifier (e.g., "119BPAF161001")
-        session (str): Session number (e.g., "1", "2", "3")
+        subject (str): Subject identifier (e.g., "sub-119BPAF161001" or "119BPAF161001")
+        session (str): Session identifier (e.g., "ses-1" or "1")
     
     RETURNS:
         np.ndarray: Connectivity matrix (N×N), or None if not found
@@ -183,13 +237,20 @@ def load_connectivity_matrix(subject: str, session: str) -> np.ndarray:
         - Validates matrix shape matches N_NODES
         - Returns None if file not found or invalid
     """
+    # Ensure subject has 'sub-' prefix
     if not subject.startswith('sub-'):
         subject = f'sub-{subject}'
+    
+    # Handle session - if it has 'ses-' prefix, extract just the number
+    if isinstance(session, str) and session.startswith('ses-'):
+        session_num = session.replace('ses-', '')
+    else:
+        session_num = str(session)
     
     # Format the search pattern
     pattern = CONFIG["file_pattern"].format(
         subject=subject,
-        session=session,
+        session=session_num,
         atlas=CONFIG["atlas_name"]
     )
     
@@ -274,7 +335,9 @@ def compute_global_metrics(A: np.ndarray) -> dict:
         
         # Compute metrics using BCT
         A_bin = (A_proc > 0).astype(float)
-        density = bct.density_und(A_bin)
+        density_result = bct.density_und(A_bin)
+        # Handle cases where function returns tuple
+        density = float(density_result[0]) if isinstance(density_result, tuple) else float(density_result)
 
         L = bct.distance_wei(1 / (A_proc + 1e-10))[0]  # Path length matrix
         path_length = np.mean(L[L > 0])  # Average, excluding zeros
@@ -304,17 +367,17 @@ def compute_global_metrics(A: np.ndarray) -> dict:
         small_worldness = clustering_coef / path_length if path_length > 0 else np.nan
 
         metrics = {
-            'density': density,
-            'path_length': path_length,
-            'global_efficiency': global_efficiency,
-            'clustering_coef': clustering_coef,
-            'transitivity': transitivity,
-            'modularity': Q,
-            'n_communities': n_communities,
-            'participation_coef_mean': participation_mean,
-            'local_efficiency_mean': local_eff_mean,
-            'betweenness_mean': betweenness_mean,
-            'small_worldness': small_worldness,
+            'density': float(density),
+            'path_length': float(path_length),
+            'global_efficiency': float(global_efficiency),
+            'clustering_coef': float(clustering_coef),
+            'transitivity': float(transitivity),
+            'modularity': float(Q),
+            'n_communities': int(n_communities),
+            'participation_coef_mean': float(participation_mean),
+            'local_efficiency_mean': float(local_eff_mean),
+            'betweenness_mean': float(betweenness_mean),
+            'small_worldness': float(small_worldness),
         }
 
         # Apply include/exclude filters
@@ -346,6 +409,42 @@ def compute_global_metrics(A: np.ndarray) -> dict:
             'small_worldness': np.nan,
         }
 
+
+# ============================================================================
+# INITIALIZE
+# ============================================================================
+
+# Create output directory
+CONFIG["output_dir"].mkdir(parents=True, exist_ok=True)
+
+# Auto-detect n_nodes if not provided
+if "n_nodes" not in CONFIG or CONFIG["n_nodes"] is None:
+    CONFIG["n_nodes"] = auto_detect_n_nodes()
+else:
+    print(f"Using provided n_nodes: {CONFIG['n_nodes']}")
+
+print("="*75)
+print("GLOBAL NETWORK METRICS ANALYSIS")
+print("="*75)
+print(f"Data directory:      {CONFIG['data_dir']}")
+print(f"Metadata file:       {CONFIG['metadata_file']}")
+print(f"Output directory:    {CONFIG['output_dir']}")
+print(f"Atlas:               {CONFIG['atlas_name']} ({CONFIG['n_nodes']} nodes)")
+print("="*75)
+print()
+
+# ============================================================================
+# LOAD DATA
+# ============================================================================
+
+print("Loading participant metadata...")
+if not CONFIG["metadata_file"].exists():
+    raise FileNotFoundError(f"Metadata file not found: {CONFIG['metadata_file']}")
+
+metadata = pd.read_csv(CONFIG["metadata_file"], sep='\t')
+print(f"✓ Loaded {len(metadata)} records")
+print(f"  Columns: {list(metadata.columns)}")
+print()
 
 # ============================================================================
 # MAIN ANALYSIS
@@ -411,35 +510,43 @@ for group in results_df[CONFIG["group_col"]].unique():
 print("\n" + "="*75)
 
 # ============================================================================
-# DIMENSIONALITY REDUCTION (Optional: UMAP Trajectories)
+# DIMENSIONALITY REDUCTION (PCA or optional UMAP)
 # ============================================================================
 
-print("\nPerforming UMAP dimensionality reduction...")
+print("\nPerforming dimensionality reduction...")
 
-# Prepare data for UMAP
+# Prepare data for dimensionality reduction
 metadata_cols = {'subject', 'session', CONFIG["group_col"], CONFIG["sex_col"]}
 metric_cols = [c for c in results_df.columns if c not in metadata_cols]
 X = results_df[metric_cols].values
 X = np.nan_to_num(X, nan=0)  # Handle NaN values
 X_scaled = StandardScaler().fit_transform(X)
 
-# Compute UMAP
-umap_model = UMAP(
-    n_neighbors=CONFIG["umap_n_neighbors"],
-    min_dist=CONFIG["umap_min_dist"],
-    metric=CONFIG["umap_metric"],
-    random_state=42
-)
-umap_coords = umap_model.fit_transform(X_scaled)
+# Use UMAP if requested and available, otherwise use PCA
+if CONFIG.get("use_umap", False) and UMAP_AVAILABLE:
+    print("Using UMAP for dimensionality reduction...")
+    umap_model = UMAP(
+        n_neighbors=CONFIG["umap_n_neighbors"],
+        min_dist=CONFIG["umap_min_dist"],
+        metric=CONFIG["umap_metric"],
+        random_state=42
+    )
+    coords = umap_model.fit_transform(X_scaled)
+    coord_names = ['umap_1', 'umap_2']
+else:
+    print("Using PCA for dimensionality reduction...")
+    pca = PCA(n_components=2, random_state=42)
+    coords = pca.fit_transform(X_scaled)
+    coord_names = ['pca_1', 'pca_2']
 
 # Add to results
-results_df['umap_1'] = umap_coords[:, 0]
-results_df['umap_2'] = umap_coords[:, 1]
+results_df[coord_names[0]] = coords[:, 0]
+results_df[coord_names[1]] = coords[:, 1]
 
-# Save UMAP coordinates
-umap_file = CONFIG["output_dir"] / "umap_coordinates.parquet"
-results_df[['subject', 'session', CONFIG["group_col"], 'umap_1', 'umap_2']].to_parquet(umap_file, index=False)
-print(f"✓ Saved UMAP coordinates to: {umap_file}")
+# Save coordinates
+coord_file = CONFIG["output_dir"] / "dimensionality_reduction_coordinates.parquet"
+results_df[['subject', 'session', CONFIG["group_col"]] + coord_names].to_parquet(coord_file, index=False)
+print(f"✓ Saved dimensionality reduction coordinates to: {coord_file}")
 
 # ============================================================================
 # VISUALIZATION
@@ -464,22 +571,22 @@ plt.tight_layout()
 plt.savefig(plot_dir / "metrics_by_group.png", dpi=150)
 print(f"✓ Saved: metrics_by_group.png")
 
-# Plot 2: UMAP trajectory
+# Plot 2: Dimensionality reduction trajectory (PCA or UMAP)
 fig, ax = plt.subplots(figsize=(10, 8))
 groups = results_df[CONFIG["group_col"]].unique()
 colors = plt.cm.Set1(np.linspace(0, 1, len(groups)))
 
 for group, color in zip(groups, colors):
     group_data = results_df[results_df[CONFIG["group_col"]] == group]
-    ax.scatter(group_data['umap_1'], group_data['umap_2'], label=group, color=color, s=100, alpha=0.6)
+    ax.scatter(group_data[coord_names[0]], group_data[coord_names[1]], label=group, color=color, s=100, alpha=0.6)
 
-ax.set_xlabel("UMAP 1")
-ax.set_ylabel("UMAP 2")
-ax.set_title("UMAP: Global Metrics Trajectories")
+ax.set_xlabel(coord_names[0].replace('_', ' ').upper())
+ax.set_ylabel(coord_names[1].replace('_', ' ').upper())
+ax.set_title(f"{coord_names[0].split('_')[0].upper()}: Global Metrics Trajectories")
 ax.legend()
 plt.tight_layout()
-plt.savefig(plot_dir / "umap_trajectories.png", dpi=150)
-print(f"✓ Saved: umap_trajectories.png")
+plt.savefig(plot_dir / "trajectories.png", dpi=150)
+print(f"✓ Saved: trajectories.png")
 
 plt.close('all')
 
@@ -730,9 +837,9 @@ print(f"✅ Metrics saved: {metrics_output}")
 print()
 
 # ======================== UMAP ANALYSIS ========================
-print("Running UMAP dimensionality reduction...")
+print("Running dimensionality reduction...")
 
-# Select features for UMAP (standardize column names)
+# Select features for dimensionality reduction (standardize column names)
 feature_cols = [
     'degree_mean', 'degree_std', 'strength_mean', 'strength_std',
     'clustering_mean', 'modularity', 'participation_coef_mean',
@@ -742,67 +849,108 @@ feature_cols = [
 
 # Filter to available columns
 available_cols = [c for c in feature_cols if c in analysis_df.columns]
-print(f"Using {len(available_cols)} features for UMAP:")
+print(f"Using {len(available_cols)} features for dimensionality reduction:")
 for col in available_cols:
     print(f"  - {col}")
 
-# Remove NaN rows
+# Prepare data - replace NaN with column median or 0
 umap_data = analysis_df[available_cols].copy()
-valid_idx = ~umap_data.isnull().any(axis=1)
-umap_data = umap_data[valid_idx].values
-umap_df_full = analysis_df[valid_idx].copy()
+print(f"Samples before NaN handling: {len(umap_data)}")
 
-print(f"Valid samples for UMAP: {len(umap_data)}")
+# Ensure all columns are numeric
+for col in umap_data.columns:
+    if umap_data[col].dtype == 'object':
+        try:
+            umap_data[col] = pd.to_numeric(umap_data[col], errors='coerce')
+        except:
+            print(f"Warning: Could not convert {col} to numeric, dropping column")
+            umap_data = umap_data.drop(columns=[col])
+            continue
+
+# Replace NaN with column median (or 0 if all NaN)
+for col in umap_data.columns:
+    if umap_data[col].isnull().any():
+        median_val = umap_data[col].median()
+        if pd.isna(median_val):
+            median_val = 0.0
+        umap_data[col].fillna(median_val, inplace=True)
+
+# Remove infinite values and replace with median
+for col in umap_data.columns:
+    col_data = umap_data[col].values
+    if np.any(np.isinf(col_data)):
+        finite_mask = np.isfinite(col_data)
+        if np.any(finite_mask):
+            median_val = np.median(col_data[finite_mask])
+        else:
+            median_val = 0.0
+        umap_data[col] = np.where(np.isinf(col_data), median_val, col_data)
+
+umap_df_full = analysis_df.copy()
+umap_data_values = umap_data.values
+
+print(f"Valid samples for dimensionality reduction: {len(umap_data_values)}")
 print()
 
 # Standardize
 scaler = StandardScaler()
-features_scaled = scaler.fit_transform(umap_data)
+features_scaled = scaler.fit_transform(umap_data_values)
 
-# UMAP with good parameters for your data
-print("Fitting UMAP (n_neighbors=15, min_dist=0.1)...")
-reducer = UMAP(
-    n_neighbors=15,
-    min_dist=0.1,
-    n_components=3,
-    metric='euclidean',
-    random_state=42,
-    verbose=1
-)
-
-embedding = reducer.fit_transform(features_scaled)
-print("✅ UMAP complete")
+# Use PCA or UMAP based on config
+if CONFIG.get("use_umap", False) and UMAP_AVAILABLE:
+    print("Using UMAP (n_neighbors=15, min_dist=0.1)...")
+    try:
+        reducer = UMAP(
+            n_neighbors=min(15, len(umap_data_values) - 1),
+            min_dist=0.1,
+            n_components=2,
+            metric='euclidean',
+            random_state=42,
+            verbose=0
+        )
+        embedding = reducer.fit_transform(features_scaled)
+        coord_names = ['umap_1', 'umap_2']
+    except Exception as e:
+        print(f"UMAP failed: {e}. Falling back to PCA...")
+        pca = PCA(n_components=2, random_state=42)
+        embedding = pca.fit_transform(features_scaled)
+        coord_names = ['pca_1', 'pca_2']
+else:
+    print("Using PCA for dimensionality reduction...")
+    pca = PCA(n_components=2, random_state=42)
+    embedding = pca.fit_transform(features_scaled)
+    coord_names = ['pca_1', 'pca_2']
+print("✅ Dimensionality reduction complete")
 print()
 
-# Create UMAP dataframe
-umap_df = umap_df_full.copy()
-umap_df['umap_1'] = embedding[:, 0]
-umap_df['umap_2'] = embedding[:, 1]
-umap_df['umap_3'] = embedding[:, 2]
+# Create dimensionality reduction dataframe
+dr_df = umap_df_full.copy()
+dr_df[coord_names[0]] = embedding[:, 0]
+dr_df[coord_names[1]] = embedding[:, 1]
 
-# Save UMAP results
-umap_output = OUTPUT_DIR / "umap_embedding.parquet"
-umap_df.to_parquet(umap_output, index=False)
-print(f"✅ UMAP embedding saved: {umap_output}")
+# Save dimensionality reduction results
+dr_output = OUTPUT_DIR / "dimensionality_reduction_embedding.parquet"
+dr_df.to_parquet(dr_output)
+print(f"✅ Saved dimensionality reduction embedding: {dr_output}")
 print()
 
 # ======================== TRAJECTORY ANALYSIS ========================
-print("Analyzing trajectories in UMAP space...")
+print("Analyzing trajectories in dimensionality reduction space...")
 
 trajectory_metrics = []
 
-for subject in umap_df['subject'].unique():
-    subj_data = umap_df[umap_df['subject'] == subject].sort_values('session')
+for subject in dr_df['subject'].unique():
+    subj_data = dr_df[dr_df['subject'] == subject].sort_values('session')
     
     if len(subj_data) < 3:
         continue
     
-    # Get UMAP positions for each session
+    # Get dimensionality reduction positions for each session
     sessions = []
     positions = []
     for _, row in subj_data.iterrows():
         sessions.append(row['session'])
-        positions.append([row['umap_1'], row['umap_2'], row['umap_3']])
+        positions.append([row[coord_names[0]], row[coord_names[1]]])
     
     if len(sessions) != 3:
         continue
@@ -892,10 +1040,6 @@ print()
 # ======================== VISUALIZATIONS ========================
 print("Creating visualizations...")
 
-# 1. 3D UMAP colored by group
-fig = plt.figure(figsize=(14, 10))
-ax = fig.add_subplot(111, projection='3d')
-
 colors_map = {
     'alone_2w': '#FF6B6B', 'alone_4w': '#FFA07A',
     'group_2w': '#4169E1', 'group_4w': '#87CEEB',
@@ -905,92 +1049,39 @@ colors_map = {
     5: '#808080'
 }
 
-for group in umap_df['group'].unique():
-    mask = umap_df['group'] == group
-    ax.scatter(
-        umap_df[mask]['umap_1'],
-        umap_df[mask]['umap_2'],
-        umap_df[mask]['umap_3'],
-        label=str(group),
-        s=80,
-        alpha=0.6,
-        color=colors_map.get(group, 'gray')
-    )
-
-ax.set_xlabel('UMAP 1', fontsize=12)
-ax.set_ylabel('UMAP 2', fontsize=12)
-ax.set_zlabel('UMAP 3', fontsize=12)
-ax.legend(loc='upper right', fontsize=10)
-ax.set_title('Brain Network Topology - Intervention Response Space\n(colored by group)', 
-             fontsize=14, fontweight='bold')
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / 'umap_3d_by_group.png', dpi=300, bbox_inches='tight')
-plt.close()
-print("✅ UMAP 3D by group saved")
-
-# 2. 3D UMAP colored by response type
-fig = plt.figure(figsize=(14, 10))
-ax = fig.add_subplot(111, projection='3d')
-
 response_colors = {
     'Decelerating': '#FF6B6B',
     'Linear': '#FFD700',
     'Accelerating': '#4169E1'
 }
 
-for rtype in trajectory_df['response_type'].unique():
-    # Get subjects with this response type
-    subjs_with_type = trajectory_df[trajectory_df['response_type'] == rtype]['subject'].values
-    mask = umap_df['subject'].isin(subjs_with_type)
-    
-    ax.scatter(
-        umap_df[mask]['umap_1'],
-        umap_df[mask]['umap_2'],
-        umap_df[mask]['umap_3'],
-        label=rtype,
-        s=80,
-        alpha=0.6,
-        color=response_colors.get(rtype, 'gray')
-    )
-
-ax.set_xlabel('UMAP 1', fontsize=12)
-ax.set_ylabel('UMAP 2', fontsize=12)
-ax.set_zlabel('UMAP 3', fontsize=12)
-ax.legend(loc='upper right', fontsize=10)
-ax.set_title('Brain Network Topology - Colored by Response Type\n(Decelerating, Linear, Accelerating)',
-             fontsize=14, fontweight='bold')
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / 'umap_3d_by_response_type.png', dpi=300, bbox_inches='tight')
-plt.close()
-print("✅ UMAP 3D by response type saved")
-
-# 3. 2D projections
+# 2D projections
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
 # Panel A: By group
-for group in umap_df['group'].unique():
-    mask = umap_df['group'] == group
-    axes[0].scatter(umap_df[mask]['umap_1'], umap_df[mask]['umap_2'],
+for group in dr_df['group'].unique():
+    mask = dr_df['group'] == group
+    axes[0].scatter(dr_df[mask][coord_names[0]], dr_df[mask][coord_names[1]],
                    label=str(group), s=60, alpha=0.6,
                    color=colors_map.get(group, 'gray'))
 
-axes[0].set_xlabel('UMAP 1', fontsize=11)
-axes[0].set_ylabel('UMAP 2', fontsize=11)
-axes[0].set_title('UMAP projection - By Group', fontsize=12, fontweight='bold')
+axes[0].set_xlabel(coord_names[0].replace('_', ' ').upper(), fontsize=11)
+axes[0].set_ylabel(coord_names[1].replace('_', ' ').upper(), fontsize=11)
+axes[0].set_title(f'{coord_names[0].split("_")[0].upper()} projection - By Group', fontsize=12, fontweight='bold')
 axes[0].legend(fontsize=10)
 axes[0].grid(alpha=0.3)
 
 # Panel B: By response type
 for rtype in trajectory_df['response_type'].unique():
     subjs_with_type = trajectory_df[trajectory_df['response_type'] == rtype]['subject'].values
-    mask = umap_df['subject'].isin(subjs_with_type)
-    axes[1].scatter(umap_df[mask]['umap_1'], umap_df[mask]['umap_2'],
+    mask = dr_df['subject'].isin(subjs_with_type)
+    axes[1].scatter(dr_df[mask][coord_names[0]], dr_df[mask][coord_names[1]],
                    label=rtype, s=60, alpha=0.6,
                    color=response_colors.get(rtype, 'gray'))
 
-axes[1].set_xlabel('UMAP 1', fontsize=11)
-axes[1].set_ylabel('UMAP 2', fontsize=11)
-axes[1].set_title('UMAP projection - By Response Type', fontsize=12, fontweight='bold')
+axes[1].set_xlabel(coord_names[0].replace('_', ' ').upper(), fontsize=11)
+axes[1].set_ylabel(coord_names[1].replace('_', ' ').upper(), fontsize=11)
+axes[1].set_title(f'{coord_names[0].split("_")[0].upper()} projection - By Response Type', fontsize=12, fontweight='bold')
 axes[1].legend(fontsize=10)
 axes[1].grid(alpha=0.3)
 

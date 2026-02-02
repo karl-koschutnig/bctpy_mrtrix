@@ -103,7 +103,7 @@ def validate_run_spec(spec: dict) -> dict:
         raise FileNotFoundError(f"Script not found: {resolved['script']}")
 
     inputs = resolved["inputs"]
-    required_inputs = ["data_dir", "metadata_file", "atlas_name", "n_nodes", "file_pattern"]
+    required_inputs = ["data_dir", "metadata_file", "atlas_name", "file_pattern"]
     for key in required_inputs:
         if key not in inputs:
             raise ValueError(f"Missing required input: {key}")

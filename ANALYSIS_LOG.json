@@ -1,0 +1,439 @@
+{
+  "analyses": [
+    {
+      "id": "20260202_132410",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T13:24:10.793139",
+      "end_time": "2026-02-02T13:24:10.803442",
+      "duration_seconds": 0.010303,
+      "success": true,
+      "results_summary": {
+        "script_executed": "/data/local/software/bctpy_mrtrix/2_global_network_metrics/01_global_basic_metrics.py",
+        "output_dir": "/data/local/129_PK01/derivatives/bct/global_metrics"
+      },
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_132423",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T13:24:23.065269",
+      "end_time": "2026-02-02T13:24:39.099216",
+      "duration_seconds": 16.033947,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "'session'",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_132627",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T13:26:27.624967",
+      "end_time": "2026-02-02T13:26:27.645012",
+      "duration_seconds": 0.020045,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.11.5",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "No module named 'bct'",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_132632",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T13:26:32.473538",
+      "end_time": "2026-02-02T13:26:41.535419",
+      "duration_seconds": 9.061881,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "'session'",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_132702",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T13:27:02.623955",
+      "end_time": "2026-02-02T13:27:11.710076",
+      "duration_seconds": 9.086121,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "name 'auto_detect_n_nodes' is not defined",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_132745",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T13:27:45.725067",
+      "end_time": "2026-02-02T13:27:55.452548",
+      "duration_seconds": 9.727481,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "Could not auto-detect n_nodes: no valid connectivity matrices found in /data/local/129_PK01/derivatives/dsistudio_connectomics/connectivity with pattern {subject}_ses-{session}*/tracks_*/by_atlas/{atlas}/*.connectivity.mat",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_132816",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T13:28:16.017234",
+      "end_time": "2026-02-02T13:28:25.678841",
+      "duration_seconds": 9.661607,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "Could not auto-detect n_nodes: no valid connectivity matrices found in /data/local/129_PK01/derivatives/dsistudio_connectomics/connectivity with pattern {subject}_ses-{session}*/tracks_*/by_atlas/{atlas}/*connectivity.mat",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_132843",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T13:28:43.643290",
+      "end_time": "2026-02-02T13:28:53.331809",
+      "duration_seconds": 9.688519,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "Unable to find a usable engine; tried using: 'pyarrow', 'fastparquet'.\nA suitable version of pyarrow or fastparquet is required for parquet support.\nTrying to import the above resulted in these errors:\n - Missing optional dependency 'pyarrow'. pyarrow is required for parquet support. Use pip or conda to install pyarrow.\n - Missing optional dependency 'fastparquet'. fastparquet is required for parquet support. Use pip or conda to install fastparquet.",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_140748",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T14:07:48.177848",
+      "end_time": "2026-02-02T14:08:42.112512",
+      "duration_seconds": 53.934664,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "Unable to find a usable engine; tried using: 'pyarrow', 'fastparquet'.\nA suitable version of pyarrow or fastparquet is required for parquet support.\nTrying to import the above resulted in these errors:\n - Missing optional dependency 'pyarrow'. pyarrow is required for parquet support. Use pip or conda to install pyarrow.\n - Missing optional dependency 'fastparquet'. fastparquet is required for parquet support. Use pip or conda to install fastparquet.",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_140855",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T14:08:55.700729",
+      "end_time": "2026-02-02T14:09:50.390489",
+      "duration_seconds": 54.68976,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "Unable to find a usable engine; tried using: 'pyarrow', 'fastparquet'.\nA suitable version of pyarrow or fastparquet is required for parquet support.\nTrying to import the above resulted in these errors:\n - Missing optional dependency 'pyarrow'. pyarrow is required for parquet support. Use pip or conda to install pyarrow.\n - Missing optional dependency 'fastparquet'. fastparquet is required for parquet support. Use pip or conda to install fastparquet.",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_141027",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T14:10:27.644508",
+      "end_time": "2026-02-02T14:11:20.467962",
+      "duration_seconds": 52.823454,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "setting an array element with a sequence.",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_141125",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T14:11:25.142260",
+      "end_time": "2026-02-02T14:12:18.295550",
+      "duration_seconds": 53.15329,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "setting an array element with a sequence.",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_145754",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T14:57:54.034363",
+      "end_time": "2026-02-02T16:03:16.357735",
+      "duration_seconds": 3922.323372,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "Found array with 0 sample(s) (shape=(0, 13)) while a minimum of 1 is required by StandardScaler.",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_162030",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T16:20:30.382227",
+      "end_time": "2026-02-02T17:23:47.990219",
+      "duration_seconds": 3797.607992,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "ufunc 'isinf' not supported for the input types, and the inputs could not be safely coerced to any supported types according to the casting rule ''safe''",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_180419",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T18:04:19.130290",
+      "end_time": "2026-02-02T19:06:11.322133",
+      "duration_seconds": 3712.191843,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "name 'umap_df' is not defined",
+      "output_verification": {}
+    },
+    {
+      "id": "20260202_194411",
+      "script_name": "pipeline_execution.py",
+      "description": "Wrapper to run a specific analysis script with logging",
+      "parameters": {
+        "script_to_run": "01_global_basic_metrics.py",
+        "run_spec": "(required CLI arg)"
+      },
+      "inputs": [],
+      "outputs": [],
+      "notes": "Initial run of template analysis",
+      "start_time": "2026-02-02T19:44:11.410091",
+      "end_time": "2026-02-02T20:47:11.246140",
+      "duration_seconds": 3779.836049,
+      "success": false,
+      "results_summary": {},
+      "environment": {
+        "hostname": "pslg067023",
+        "user": "mri",
+        "python_version": "3.10.12",
+        "working_directory": "/data/local/software/bctpy_mrtrix",
+        "script_hash": null,
+        "git_commit": "a70af58"
+      },
+      "error_message": "Missing expected outputs:\n/data/local/129_PK01/derivatives/bct/global_metrics/umap_coordinates.parquet\n/data/local/129_PK01/derivatives/bct/global_metrics/plots/umap_trajectories.png",
+      "output_verification": {}
+    }
+  ],
+  "created": "2026-02-02T13:24:10.803553"
+}
