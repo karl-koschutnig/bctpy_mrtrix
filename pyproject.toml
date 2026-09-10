@@ -63,5 +63,5 @@ python_files = ["test_*.py"]
 
 [tool.uv]
 # UV configuration for reproducible dependency management
-extras = ["temporal"]
+# Note: UV uses pyproject.toml's [project.optional-dependencies] for extras
 index-url = "https://pypi.org/simple"
