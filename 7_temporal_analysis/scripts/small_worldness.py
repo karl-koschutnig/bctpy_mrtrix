@@ -225,6 +225,10 @@ def calculate_small_worldness(W, n_null=100, random_state=42, expected_nodes=Non
     
     # Handle disconnected graphs
     if np.isinf(L):
+        warnings.warn(
+            "Disconnected graph (infinite characteristic path length) - "
+            "small-worldness set to NaN"
+        )
         return np.nan
     
     # Calculate random network metrics (average over null models)
@@ -342,14 +346,21 @@ def process_connectome_directory(data_dir, metadata, n_nodes=200, output_dir=Non
         return pd.DataFrame()
     
     results = []
-    
+    n_disconnected = 0
+
     for participant_id, session, filepath in tqdm(files, desc="Processing connectomes"):
         try:
             W = load_connectome(filepath, n_nodes)
-            sigma = calculate_small_worldness(
-                W, n_null=n_null, random_state=random_state, expected_nodes=n_nodes
-            )
-            
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                sigma = calculate_small_worldness(
+                    W, n_null=n_null, random_state=random_state, expected_nodes=n_nodes
+                )
+            if any("Disconnected graph" in str(w.message) for w in caught):
+                n_disconnected += 1
+            for w in caught:
+                warnings.warn_explicit(w.message, w.category, w.filename, w.lineno)
+
             results.append({
                 'participant_id': participant_id,
                 'session': session,
@@ -362,7 +373,14 @@ def process_connectome_directory(data_dir, metadata, n_nodes=200, output_dir=Non
                 'session': session,
                 'small_worldness': np.nan
             })
-    
+
+    if len(results) > 0:
+        print(
+            f"Small-worldness: {n_disconnected}/{len(results)} connectomes "
+            f"came back NaN due to a disconnected graph (infinite characteristic "
+            f"path length)."
+        )
+
     results_df = pd.DataFrame(results)
     
     # Merge with metadata to preserve all rows
