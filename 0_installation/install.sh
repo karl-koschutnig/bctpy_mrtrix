@@ -121,42 +121,26 @@ main() {
     echo_success "Virtual environment created"
     echo ""
 
-    # Step 4: Install core dependencies
-    echo_step "Installing Core Dependencies"
+    # Step 4: Install Python dependencies via uv sync (reads pyproject.toml/uv.lock)
+    echo_step "Installing Python Dependencies"
     echo_info "This may take a few minutes..."
-    uv pip install --python "$VENV_DIR/bin/python" \
-        numpy>=1.20.0 \
-        pandas>=1.3.0 \
-        bctpy>=0.5.2 \
-        scipy>=1.7.0 \
-        statsmodels>=0.13.0 \
-        openpyxl>=3.0.0 \
-        flask>=2.0.0 \
-        waitress>=2.0.0 \
-        pyarrow>=14.0.0 \
-        h5py>=3.10.0 \
-        matplotlib \
-        seaborn
-    echo_success "Core dependencies installed"
+    (cd "$ROOT_DIR" && uv sync --all-extras)
+    echo_success "Python dependencies installed"
     echo ""
 
-    # Step 5: Install temporal analysis dependencies
-    echo_step "Installing Temporal Analysis Dependencies"
-    uv pip install --python "$VENV_DIR/bin/python" \
-        umap-learn>=0.5.0 \
-        scikit-learn>=1.0.0
-    echo_success "Temporal analysis dependencies installed"
-    echo ""
-
-    # Step 6: Generate lock file for reproducibility
-    echo_step "Generating Lock File"
-    cd "$ROOT_DIR"
-    if [ -f "uv.lock" ]; then
-        echo_info "uv.lock already exists, skipping"
-    else
-        uv pip compile pyproject.toml --all-extras -o uv.lock
-        echo_success "uv.lock created for reproducible installs"
+    # Step 5: Install/restore the R environment via renv
+    echo_step "Installing R Dependencies (renv)"
+    if ! command -v Rscript >/dev/null 2>&1; then
+        echo_error "R not found. Install R first (e.g. 'brew install r'), then re-run this script."
+        exit 1
     fi
+    if [ ! -f "$ROOT_DIR/renv.lock" ]; then
+        echo_info "No renv.lock found — generating it now (one-time, can take several minutes)..."
+        (cd "$ROOT_DIR" && Rscript 0_installation/init_r_env.R)
+    else
+        (cd "$ROOT_DIR" && Rscript 0_installation/setup_r_env.R)
+    fi
+    echo_success "R dependencies installed"
     echo ""
 
     # Step 7: Finalize
@@ -178,7 +162,7 @@ main() {
     echo ""
     echo_info "To verify the installation:"
     echo_info "  source $VENV_DIR/bin/activate"
-    echo_info "  python 0_installation/preflight_check.py run_spec.json --temporal --uv-lock"
+    echo_info "  python 0_installation/preflight_check.py run_spec.json --temporal --r --uv-lock"
     echo ""
 }
 

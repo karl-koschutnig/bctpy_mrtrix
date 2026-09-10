@@ -85,19 +85,23 @@ source .venv/bin/activate
 pip install -e .[default]
 ```
 
-## R Dependencies (for GAM Modeling)
+## R Dependencies
 
-The temporal analysis pipeline requires R with the following packages:
+R packages are managed with [renv](https://rstudio.github.io/renv/),
+scoped to this repo (not your global R library). `install.sh` handles
+this automatically:
 
-```r
-install.packages(c(
-  'mgcv',      # Generalized Additive Models
-  'tidyverse', # Data manipulation
-  'jsonlite',  # JSON support
-  'argparse',  # Command-line argument parsing
-  'R.matlab'   # MAT file I/O
-), repos = 'https://cloud.r-project.org/')
-```
+- First run ever: generates `renv.lock` by installing the required
+  packages (`mgcv`, `lme4`, `lmerTest`, `emmeans`, `tidyverse`,
+  `jsonlite`, `argparse`, `R.matlab`, `arrow`) — can take several minutes.
+- Every subsequent run: restores the exact locked versions via
+  `renv::restore()` — fast.
+
+To add a new R package: install it normally inside the project (`Rscript
+-e "install.packages('somepkg')"` from the repo root — renv intercepts
+this automatically once `.Rprofile` is present), then refresh the lock
+file with `Rscript 0_installation/init_r_env.R`, then commit the updated
+`renv.lock`.
 
 ## Environment Configuration
 

@@ -15,6 +15,8 @@ dependencies = [
     "waitress>=2.0.0",
     "pyarrow>=14.0.0",
     "h5py>=3.10.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
 ]
 
 [project.optional-dependencies]
@@ -35,8 +37,16 @@ default = [
     "waitress>=2.0.0",
     "pyarrow>=14.0.0",
     "h5py>=3.10.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
     "umap-learn>=0.5.0",
     "scikit-learn>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
 ]
 
 [tool.setuptools]
