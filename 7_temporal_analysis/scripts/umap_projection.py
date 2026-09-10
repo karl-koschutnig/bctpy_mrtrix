@@ -389,6 +389,16 @@ def process_umap_projection(input_file, output_dir, timepoint_col='session',
         exclude_cols = ['participant_id', 'session', 'group', 'age', 'sex', timepoint_col]
         metric_cols = [col for col in data.columns if col not in exclude_cols]
 
+    # Drop rows with NaN metrics before projection. This module is
+    # exploratory-only visualization (not the primary statistical analysis),
+    # so dropping is safe here - unlike mixed_models.R, which needs the full
+    # decision about missing data left to the study team.
+    n_before = len(data)
+    data = data.dropna(subset=metric_cols).reset_index(drop=True)
+    n_dropped = n_before - len(data)
+    if n_dropped > 0:
+        print(f"Dropped {n_dropped}/{n_before} rows with NaN metrics before UMAP projection")
+
     # Run UMAP
     embedding = run_umap(
         data[metric_cols],
