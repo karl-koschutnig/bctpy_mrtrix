@@ -5,22 +5,24 @@ Preflight checks for pipeline runs.
 - Validates run_spec.json exists and is readable
 - Checks required input/output paths
 - Verifies required Python packages are installed (static list)
+- Optionally checks temporal analysis dependencies
 
 Usage:
   python 0_installation/preflight_check.py /path/to/run_spec.json
+  python 0_installation/preflight_check.py /path/to/run_spec.json --temporal
 """
 
 from __future__ import annotations
 
 import argparse
-import importlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
-import os
 
 
+# Core required packages
 REQUIRED_PACKAGES = [
     "numpy",
     "pandas",
@@ -29,6 +31,12 @@ REQUIRED_PACKAGES = [
     "matplotlib",
     "seaborn",
     "umap",
+    "sklearn",
+]
+
+# Packages specifically for temporal analysis pipeline
+TEMPORAL_PACKAGES = [
+    "umap_learn",
     "sklearn",
 ]
 
@@ -55,6 +63,7 @@ def resolve_path(spec_dir: Path, raw_path: str) -> Path:
 
 
 def check_imports(requirements: list[str]) -> list[str]:
+    """Check if packages are importable. Returns list of missing packages."""
     missing = []
     for pkg in requirements:
         try:
@@ -67,14 +76,28 @@ def check_imports(requirements: list[str]) -> list[str]:
     return missing
 
 
+def check_optional_imports(requirements: list[str]) -> list[str]:
+    """Check optional packages but don't fail if missing."""
+    return check_imports(requirements)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Preflight checks for pipeline execution")
     parser.add_argument("run_spec", help="Path to run_spec.json")
+    parser.add_argument(
+        "--temporal", action="store_true", 
+        help="Check temporal analysis dependencies"
+    )
+    parser.add_argument(
+        "--uv-lock", action="store_true",
+        help="Check if uv.lock exists for reproducible installs"
+    )
     args = parser.parse_args()
 
     spec_path = Path(args.run_spec).expanduser().resolve()
     spec = load_spec(spec_path)
 
+    # Check Python environment if specified in spec
     venv_python = spec.get("venv_python")
     if venv_python and Path(sys.executable).resolve() != Path(venv_python).resolve():
         print(f"✗ Wrong Python: {sys.executable}\n  Run with: {venv_python}", file=sys.stderr)
@@ -82,6 +105,7 @@ def main() -> None:
 
     spec_dir = Path(spec["_spec_dir"]).resolve()
 
+    # Check script path if specified
     script_path = None
     script_raw = spec.get("script")
     if script_raw:
@@ -89,6 +113,7 @@ def main() -> None:
         if not script_path.exists():
             raise FileNotFoundError(f"Script not found: {script_path}")
 
+    # Check inputs and outputs
     inputs = spec.get("inputs", {})
     outputs = spec.get("outputs", {})
 
@@ -104,13 +129,16 @@ def main() -> None:
     metadata_file = resolve_path(spec_dir, inputs.get("metadata_file", ""))
     output_dir = resolve_path(spec_dir, outputs.get("output_dir", ""))
 
+    # Validate paths
     if not data_dir.exists():
         raise FileNotFoundError(f"Data directory not found: {data_dir}")
     if not metadata_file.exists():
         raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
 
+    # Check required packages
     missing = check_imports(REQUIRED_PACKAGES)
 
+    # Print status
     if script_path is not None:
         print("✓ Script found:", script_path)
     else:
@@ -119,11 +147,29 @@ def main() -> None:
     print("✓ Metadata file:", metadata_file)
     print("✓ Output directory (will be created if needed):", output_dir)
 
+    # Report missing packages
     if missing:
-        print("✗ Missing packages:", ", ".join(missing))
+        print("✗ Missing required packages:", ", ".join(missing))
         sys.exit(2)
 
     print("✓ All required packages are installed")
+    
+    # Check temporal analysis packages if requested
+    if args.temporal:
+        temporal_missing = check_optional_imports(TEMPORAL_PACKAGES)
+        if temporal_missing:
+            print("⚠ Optional temporal analysis packages missing:", ", ".join(temporal_missing))
+            print("  Install with: uv pip install umap-learn scikit-learn")
+        else:
+            print("✓ All temporal analysis packages are installed")
+    
+    # Check uv.lock if requested
+    if args.uv_lock:
+        uv_lock_path = spec_dir / "uv.lock"
+        if uv_lock_path.exists():
+            print("✓ uv.lock found (reproducible environment configured)")
+        else:
+            print("⚠ uv.lock not found - run 'uv pip compile pyproject.toml -o uv.lock' for reproducibility")
 
 
 if __name__ == "__main__":

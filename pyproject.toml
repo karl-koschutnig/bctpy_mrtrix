@@ -3,6 +3,7 @@ name = "bctpy-mrtrix"
 version = "0.1.0"
 description = "Brain Connectivity Toolbox analysis with MRTrix connectivity matrices"
 requires-python = ">=3.9,<3.13"
+readme = "README.md"
 dependencies = [
     "numpy>=1.20.0",
     "pandas>=1.3.0",
@@ -14,6 +15,28 @@ dependencies = [
     "waitress>=2.0.0",
     "pyarrow>=14.0.0",
     "h5py>=3.10.0",
+]
+
+[project.optional-dependencies]
+# Temporal analysis pipeline dependencies
+temporal = [
+    "umap-learn>=0.5.0",
+    "scikit-learn>=1.0.0",
+]
+# All dependencies
+default = [
+    "numpy>=1.20.0",
+    "pandas>=1.3.0",
+    "bctpy>=0.5.2",
+    "scipy>=1.7.0",
+    "statsmodels>=0.13.0",
+    "openpyxl>=3.0.0",
+    "flask>=2.0.0",
+    "waitress>=2.0.0",
+    "pyarrow>=14.0.0",
+    "h5py>=3.10.0",
+    "umap-learn>=0.5.0",
+    "scikit-learn>=1.0.0",
 ]
 
 [tool.setuptools]
@@ -32,7 +55,13 @@ pythonpath = [
     "3_nodal_network_metrics",
     "4_statistical_classification",
     "5_responder_analysis",
-    "6_visualization"
+    "6_visualization",
+    "7_temporal_analysis"
 ]
-testpaths = ["tests"]
+testpaths = ["tests", "7_temporal_analysis/tests"]
 python_files = ["test_*.py"]
+
+[tool.uv]
+# UV configuration for reproducible dependency management
+extras = ["temporal"]
+index-url = "https://pypi.org/simple"
