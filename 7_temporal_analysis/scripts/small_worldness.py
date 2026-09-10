@@ -443,8 +443,13 @@ def main():
     
     print(f"Processed {len(results)} connectomes")
     print(f"Results saved to {args.output_dir}")
-    print(f"\nSmall-worldness summary:")
-    print(results['small_worldness'].describe())
+    
+    # Print summary if we have results
+    if len(results) > 0 and 'small_worldness' in results.columns:
+        print(f"\nSmall-worldness summary:")
+        print(results['small_worldness'].describe())
+    else:
+        print("\nNo connectomes processed - check data directory and metadata file")
 
 
 if __name__ == "__main__":

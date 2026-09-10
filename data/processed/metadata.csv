@@ -1,0 +1,10 @@
+participant_id,session,group,age,sex
+sub-001,ses-1,ctrl,25,0
+sub-001,ses-2,ctrl,25,0
+sub-001,ses-3,ctrl,25,0
+sub-002,ses-1,2w,30,1
+sub-002,ses-2,2w,30,1
+sub-002,ses-3,2w,30,1
+sub-003,ses-1,4w,28,0
+sub-003,ses-2,4w,28,0
+sub-003,ses-3,4w,28,0

@@ -27,7 +27,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${ROOT_DIR}/data/processed"
 METADATA_FILE="${DATA_DIR}/metadata.csv"
-CONNECTOMES_DIR="${ROOT_DIR}/data/connectomes"
+
+# Default connectomes path (can be overridden by setting CONNECTOMES_DIR)
+# Default: use the standard study data location
+CONNECTOMES_DIR="${CONNECTOMES_DIR:-/Volumes/Evo/data/129/connectomics/bct_input}"
+
 OUTPUTS_DIR="${ROOT_DIR}/outputs/temporal_analysis"
 
 # Atlas settings
@@ -180,11 +184,16 @@ run_pipeline() {
     
     # Step 1: Small-worldness calculation
     echo_info "Step 1/4: Calculating small-worldness..."
-    echo_command "python 7_temporal_analysis/scripts/small_worldness.py \\"
-    echo_command "  --data-dir ${CONNECTOMES_DIR}/${ATLAS} \\"
-    echo_command "  --metadata-file ${METADATA_FILE} \\"
-    echo_command "  --output-dir ${OUTPUTS_DIR}/small_worldness \\"
-    echo_command "  --n-nodes ${N_NODES}"
+    echo_info "Data directory: ${CONNECTOMES_DIR}/${ATLAS}"
+    
+    # Check if data directory exists
+    if [[ ! -d "${CONNECTOMES_DIR}/${ATLAS}" ]]; then
+        echo_error "Connectome data directory not found: ${CONNECTOMES_DIR}/${ATLAS}"
+        echo_info "Expected location: /Volumes/Evo/data/129/connectomics/bct_input/Schaefer200"
+        echo_info "Set CONNECTOMES_DIR environment variable to your data location"
+        echo_info "Example: export CONNECTOMES_DIR=/path/to/your/connectomes"
+        exit 1
+    fi
     
     python 7_temporal_analysis/scripts/small_worldness.py \
         --data-dir "${CONNECTOMES_DIR}/${ATLAS}" \
@@ -192,6 +201,7 @@ run_pipeline() {
         --output-dir "${OUTPUTS_DIR}/small_worldness" \
         --n-nodes ${N_NODES} || {
         echo_error "Small-worldness calculation failed"
+        echo_info "Check that connectome files exist in: ${CONNECTOMES_DIR}/${ATLAS}"
         exit 1
     }
     echo_success "Small-worldness complete"
