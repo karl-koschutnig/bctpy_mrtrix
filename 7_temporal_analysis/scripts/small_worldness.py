@@ -185,35 +185,32 @@ def make_random_graph(n_nodes, density=None):
     return W
 
 
-def calculate_small_worldness(W, n_null=100, random_state=42):
+def calculate_small_worldness(W, n_null=100, random_state=42, expected_nodes=None):
     """
     Calculate small-worldness coefficient sigma for a connectivity matrix.
-    
+
     sigma = (C / C_random) / (L / L_random)
-    
+
     Args:
         W: n x n weighted connectivity matrix (symmetric, zero diagonal)
         n_null: number of random null models to average
         random_state: random seed for reproducibility
-    
+        expected_nodes: if given, validate W has this many nodes (None skips the check)
+
     Returns:
         sigma: small-worldness coefficient
-    
+
     Raises:
         ValueError: if matrix is not square, not symmetric, or diagonal not zero
     """
     n_nodes = W.shape[0]
-    
-    # Validate matrix
-    n_nodes = W.shape[0]
-    expected_nodes = 200  # Schaefer200
-    
+
     if W.shape[0] != W.shape[1]:
         raise ValueError(f"Matrix must be square, got {W.shape}")
-    
-    if n_nodes != expected_nodes:
+
+    if expected_nodes is not None and n_nodes != expected_nodes:
         raise ValueError(f"Matrix must be {expected_nodes}x{expected_nodes}, got {W.shape}")
-    
+
     if not np.allclose(W, W.T):
         raise ValueError("Matrix must be symmetric")
     
@@ -349,7 +346,9 @@ def process_connectome_directory(data_dir, metadata, n_nodes=200, output_dir=Non
     for participant_id, session, filepath in tqdm(files, desc="Processing connectomes"):
         try:
             W = load_connectome(filepath, n_nodes)
-            sigma = calculate_small_worldness(W, n_null=n_null, random_state=random_state)
+            sigma = calculate_small_worldness(
+                W, n_null=n_null, random_state=random_state, expected_nodes=n_nodes
+            )
             
             results.append({
                 'participant_id': participant_id,

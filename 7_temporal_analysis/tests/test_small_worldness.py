@@ -70,6 +70,32 @@ def temp_output_dir():
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def test_calculate_small_worldness_accepts_non_schaefer_atlas():
+    """A 166x166 (AAL3) matrix must not be rejected by a hardcoded 200-node check."""
+    from scripts.small_worldness import calculate_small_worldness
+
+    rng = np.random.default_rng(0)
+    W = rng.random((166, 166))
+    W = (W + W.T) / 2
+    np.fill_diagonal(W, 0)
+
+    # Must not raise, even though 166 != the old hardcoded 200
+    calculate_small_worldness(W, n_null=2, random_state=0, expected_nodes=166)
+
+
+def test_calculate_small_worldness_still_validates_expected_nodes():
+    """When a mismatched expected_nodes is passed, it should still be caught."""
+    from scripts.small_worldness import calculate_small_worldness
+
+    rng = np.random.default_rng(0)
+    W = rng.random((166, 166))
+    W = (W + W.T) / 2
+    np.fill_diagonal(W, 0)
+
+    with pytest.raises(ValueError, match="200x200"):
+        calculate_small_worldness(W, n_null=2, expected_nodes=200)
+
+
 # ============================================================================
 # TESTS: calculate_small_worldness function
 # ============================================================================
@@ -293,13 +319,13 @@ class TestEdgeCases:
             calculate_small_worldness(conn)
 
     def test_wrong_dimensions_raises_error(self):
-        """Wrong matrix dimensions should raise ValueError."""
+        """Wrong matrix dimensions should raise ValueError when expected_nodes is given."""
         from scripts.small_worldness import calculate_small_worldness
-        
+
         conn = np.random.rand(100, 100)  # Wrong size
-        
+
         with pytest.raises(ValueError, match="200x200"):
-            calculate_small_worldness(conn)
+            calculate_small_worldness(conn, expected_nodes=200)
 
     def test_diagonal_not_zero_warning(self):
         """Non-zero diagonal should trigger warning."""
