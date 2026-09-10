@@ -5,11 +5,12 @@ import json
 import sys
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 # Skript importieren (liegt eine Ebene höher)
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from preflight_check import load_spec, resolve_path, check_imports, main
+from preflight_check import load_spec, resolve_path, check_imports, check_r_environment, main
 
 
 # ── load_spec ────────────────────────────────────────────────────────────────
@@ -223,3 +224,47 @@ def test_main_without_script_is_allowed(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "Script not specified" in captured.out
     assert "✓ Data directory" in captured.out
+
+
+# ── check_r_environment ─────────────────────────────────────────────────────
+
+def test_check_r_environment_rscript_missing(monkeypatch, tmp_path):
+    """Fehlt Rscript im PATH, wird das als Problem gemeldet."""
+    monkeypatch.setattr("preflight_check.shutil.which", lambda name: None)
+    problems = check_r_environment(tmp_path)
+    assert any("Rscript not found" in p for p in problems)
+
+
+def test_check_r_environment_missing_lock(monkeypatch, tmp_path):
+    """Fehlende renv.lock wird gemeldet, auch wenn Rscript vorhanden ist."""
+    monkeypatch.setattr("preflight_check.shutil.which", lambda name: "/usr/bin/Rscript")
+    monkeypatch.setattr(
+        "preflight_check.subprocess.run",
+        lambda *a, **k: SimpleNamespace(stdout="", returncode=0),
+    )
+    problems = check_r_environment(tmp_path)
+    assert any("renv.lock not found" in p for p in problems)
+
+
+def test_check_r_environment_missing_packages(monkeypatch, tmp_path):
+    """Fehlende R-Pakete werden über die Rscript-Ausgabe erkannt."""
+    (tmp_path / "renv.lock").write_text("{}")
+    monkeypatch.setattr("preflight_check.shutil.which", lambda name: "/usr/bin/Rscript")
+    monkeypatch.setattr(
+        "preflight_check.subprocess.run",
+        lambda *a, **k: SimpleNamespace(stdout="lme4,emmeans", returncode=0),
+    )
+    problems = check_r_environment(tmp_path)
+    assert any("lme4" in p and "emmeans" in p for p in problems)
+
+
+def test_check_r_environment_all_ok(monkeypatch, tmp_path):
+    """Keine Probleme, wenn Rscript, renv.lock und alle Pakete vorhanden sind."""
+    (tmp_path / "renv.lock").write_text("{}")
+    monkeypatch.setattr("preflight_check.shutil.which", lambda name: "/usr/bin/Rscript")
+    monkeypatch.setattr(
+        "preflight_check.subprocess.run",
+        lambda *a, **k: SimpleNamespace(stdout="", returncode=0),
+    )
+    problems = check_r_environment(tmp_path)
+    assert problems == []

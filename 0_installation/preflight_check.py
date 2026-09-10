@@ -20,6 +20,8 @@ import json
 import os
 from pathlib import Path
 import sys
+import shutil
+import subprocess
 
 
 # Core required packages
@@ -39,6 +41,46 @@ TEMPORAL_PACKAGES = [
     "umap_learn",
     "sklearn",
 ]
+
+# R packages required for the temporal analysis pipeline (see renv.lock)
+REQUIRED_R_PACKAGES = [
+    "mgcv", "lme4", "lmerTest", "emmeans", "tidyverse",
+    "jsonlite", "argparse", "R.matlab", "arrow",
+]
+
+
+def check_r_environment(repo_root: Path) -> list[str]:
+    """Check that Rscript, renv.lock, and the required R packages are available.
+
+    Returns a list of human-readable problem strings; empty list means OK.
+    """
+    problems: list[str] = []
+
+    if shutil.which("Rscript") is None:
+        problems.append("Rscript not found on PATH")
+        return problems
+
+    if not (repo_root / "renv.lock").exists():
+        problems.append(f"renv.lock not found at {repo_root / 'renv.lock'}")
+
+    check_expr = (
+        "pkgs <- c(" + ", ".join(f'"{p}"' for p in REQUIRED_R_PACKAGES) + "); "
+        "missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]; "
+        "cat(paste(missing, collapse = ','))"
+    )
+    # RENV_CONFIG_SYNCHRONIZED_CHECK=FALSE suppresses renv's "project is
+    # out-of-sync" activation notice, which otherwise prints to stdout and
+    # would be misparsed as a missing-package name below.
+    result = subprocess.run(
+        ["Rscript", "-e", check_expr],
+        capture_output=True, text=True, cwd=repo_root,
+        env={**os.environ, "RENV_CONFIG_SYNCHRONIZED_CHECK": "FALSE"},
+    )
+    missing = [p for p in result.stdout.strip().split(",") if p]
+    if missing:
+        problems.append("Missing R packages: " + ", ".join(missing))
+
+    return problems
 
 
 def load_spec(spec_path: Path) -> dict:
@@ -91,6 +133,10 @@ def main() -> None:
     parser.add_argument(
         "--uv-lock", action="store_true",
         help="Check if uv.lock exists for reproducible installs"
+    )
+    parser.add_argument(
+        "--r", action="store_true",
+        help="Check R/renv environment for the temporal analysis pipeline"
     )
     args = parser.parse_args()
 
@@ -163,15 +209,28 @@ def main() -> None:
         else:
             print("✓ All temporal analysis packages are installed")
     
+    repo_root = Path(__file__).resolve().parent.parent
+
     # Check uv.lock if requested
     if args.uv_lock:
-        # uv.lock is at repository root, not in 0_installation/
-        uv_lock_path = spec_dir.parent / "uv.lock"
+        uv_lock_path = repo_root / "uv.lock"
         if uv_lock_path.exists():
             print("✓ uv.lock found (reproducible environment configured)")
         else:
             print("⚠ uv.lock not found at repo root")
-            print("  Generate with: uv pip compile pyproject.toml --all-extras -o uv.lock")
+            print("  Generate with: uv sync")
+
+    # Check R/renv environment if requested
+    if args.r:
+        r_problems = check_r_environment(repo_root)
+        if r_problems:
+            print("✗ R environment issues:")
+            for p in r_problems:
+                print("   -", p)
+            print("  Run: Rscript 0_installation/setup_r_env.R")
+            sys.exit(4)
+        else:
+            print("✓ R environment OK (renv.lock present, all required packages available)")
 
 
 if __name__ == "__main__":
