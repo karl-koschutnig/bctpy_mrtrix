@@ -67,11 +67,11 @@ python 0_installation/preflight_check.py run_spec.json --uv-lock
 # Create venv
 uv venv .venv --python python3.11
 
-# Install core dependencies
-uv pip install numpy pandas bctpy scipy matplotlib seaborn openpyxl h5py pyarrow statsmodels flask waitress
+# Install all dependencies (including temporal analysis)
+uv pip install numpy pandas bctpy scipy matplotlib seaborn openpyxl h5py pyarrow statsmodels flask waitress umap-learn scikit-learn
 
-# Install temporal analysis dependencies
-uv pip install umap-learn scikit-learn
+# OR install from pyproject.toml with extras
+uv pip install -e ".[default]"
 
 # Generate lock file for reproducibility
 uv pip compile pyproject.toml --all-extras -o uv.lock
@@ -127,7 +127,9 @@ uv pip compile pyproject.toml --all-extras -o uv.lock
 
 To install from the lock file:
 ```bash
-uv pip sync  # Installs exact versions from uv.lock
+uv sync  # Installs exact versions from uv.lock
+# OR
+uv pip sync uv.lock
 ```
 
 This ensures everyone uses the exact same package versions.
@@ -140,7 +142,9 @@ This ensures everyone uses the exact same package versions.
 
 **Solution:** uv.lock is in **UV format**, not pip format. Use:
 ```bash
-uv pip sync  # Correct way to install from uv.lock
+uv sync  # Correct way to install from uv.lock
+# OR
+uv pip sync uv.lock
 ```
 
 ### UV Not Found

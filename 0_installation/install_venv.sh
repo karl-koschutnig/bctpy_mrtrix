@@ -125,5 +125,5 @@ if [ -f "uv.lock" ]; then
     echo "✓ uv.lock already exists"
 else
     uv pip compile pyproject.toml --all-extras -o uv.lock
-echo "✓ uv.lock created"
+    echo "✓ uv.lock created"
 fi
