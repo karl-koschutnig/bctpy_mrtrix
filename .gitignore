@@ -2,6 +2,9 @@
 .venv/
 venv/
 env/
+
+# Git worktrees (agent scratch workspaces)
+.worktrees/
 logs/
 *.log
 # IDE
@@ -48,9 +51,14 @@ htmlcov/
 ehthumbs.db
 Thumbs.db
 
-# Project specific
+# Project specific (real subject data / results - not for sharing yet)
 ANALYSIS_LOG.json
 outputs/
+results/
+results_*/
+!results_mock_*/
+test_pipeline/
+data/
 converted_npy/
 *.xlsx
 ANATOMICAL_FINDINGS_EXTENDED.md
