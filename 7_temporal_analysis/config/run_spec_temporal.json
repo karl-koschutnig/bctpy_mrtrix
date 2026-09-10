@@ -24,9 +24,7 @@
       "transitivity",
       "strength",
       "degree"
-    ],
-    "atlas": "Schaefer200",
-    "n_nodes": 200
+    ]
   },
   "small_worldness": {
     "n_null_models": 100,
@@ -38,9 +36,9 @@
     "min_dist": 0.1,
     "random_state": 42
   },
-  "gam": {
-    "smooth_terms": ["session"],
-    "fixed_effects": ["group", "sex", "age"],
-    "family": "gaussian"
+  "mixed_model": {
+    "fixed_effects": ["group", "session"],
+    "interaction": true,
+    "random_effect": "participant_id"
   }
 }
