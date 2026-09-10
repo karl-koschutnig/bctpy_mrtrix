@@ -1,14 +1,14 @@
 {
   "inputs": {
+    "_comment_data_dir": "Not read by run_temporal_analysis.sh - atlas connectome dirs are parameterized there via CONNECTOMES_DIR/<atlas>.",
     "data_dir": "/Volumes/Evo/data/129/connectomics/bct_input/Schaefer200",
     "metadata_file": "data/processed/metadata.csv",
     "metrics_file": "outputs/global_metrics/metrics.parquet"
   },
   "outputs": {
     "output_dir": "outputs/temporal_analysis",
-    "gam_dir": "outputs/temporal_analysis/gam_results",
+    "mixed_model_dir": "outputs/temporal_analysis/mixed_model_results",
     "umap_dir": "outputs/temporal_analysis/umap_results",
-    "turning_dir": "outputs/temporal_analysis/turning_points",
     "small_world_dir": "outputs/temporal_analysis/small_worldness"
   },
   "temporal": {
