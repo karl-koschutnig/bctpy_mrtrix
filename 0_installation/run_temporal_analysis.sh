@@ -116,18 +116,15 @@ check_environment() {
     fi
     echo_success "Virtual environment active: $VIRTUAL_ENV"
     
-    # Check R for GAM
-    if ! check_command Rscript; then
-        echo_error "R not found. GAM modeling requires R."
-        echo_info "Install R from: https://cran.r-project.org/"
-        echo_info "Then install packages: Rscript -e \"install.packages(c('mgcv', 'tidyverse', 'jsonlite', 'argparse'), repos='https://cloud.r-project.org/')\""
-        read -p "Continue without R? (y/n) [n]: " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-    else
+    # Check R for GAM (optional)
+    HAS_R=false
+    if check_command Rscript; then
         echo_success "R: $(Rscript --version 2>&1 | head -1)"
+        HAS_R=true
+    else
+        echo_info "R not found - GAM modeling will be skipped"
+        echo_info "To install R: brew install r"
+        echo_info "Then: Rscript -e \"install.packages(c('mgcv', 'tidyverse', 'jsonlite', 'argparse'), repos='https://cloud.r-project.org/')\""
     fi
     
     echo ""
@@ -201,7 +198,7 @@ run_pipeline() {
     echo ""
     
     # Step 2: GAM models (if R is available)
-    if check_command Rscript; then
+    if $HAS_R; then
         echo_info "Step 2/4: Fitting GAM models..."
         echo_command "Rscript 7_temporal_analysis/scripts/gam_models.R \\"
         echo_command "  --input-file ${OUTPUTS_DIR}/small_worldness/small_worldness_results.csv \\"
