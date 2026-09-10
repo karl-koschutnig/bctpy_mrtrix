@@ -181,6 +181,9 @@ create_metadata() {
 # RUN TEMPORAL ANALYSIS PIPELINE
 # ============================================================================
 
+declare -A ATLAS_STATUS
+declare -A ATLAS_STATUS_REASON
+
 run_pipeline() {
     echo_step "Running Temporal Analysis Pipeline"
 
@@ -198,28 +201,34 @@ run_pipeline() {
 
         # Step 1: Small-worldness calculation
         echo_info "Step 1/3: Calculating small-worldness..."
-        python 7_temporal_analysis/scripts/small_worldness.py \
+        if ! python 7_temporal_analysis/scripts/small_worldness.py \
             --data-dir "${CONNECTOMES_DIR}/${ATLAS}" \
             --metadata-file "${METADATA_FILE}" \
             --output-dir "${ATLAS_OUT}/small_worldness" \
-            --n-nodes "${N_NODES}" || {
+            --n-nodes "${N_NODES}"; then
             echo_error "Small-worldness calculation failed for ${ATLAS}"
-            exit 1
-        }
+            ATLAS_STATUS[$ATLAS]="failed"
+            ATLAS_STATUS_REASON[$ATLAS]="small-worldness calculation failed"
+            echo ""
+            continue
+        fi
         echo_success "Small-worldness complete"
 
         # Step 2: Mixed-effects models (Group x Time)
         if $HAS_R; then
             echo_info "Step 2/3: Fitting mixed-effects models..."
-            Rscript 7_temporal_analysis/scripts/mixed_models.R \
+            if ! Rscript 7_temporal_analysis/scripts/mixed_models.R \
                 --input-file "${ATLAS_OUT}/small_worldness/small_worldness_results.csv" \
                 --output-dir "${ATLAS_OUT}/mixed_model_results" \
                 --timepoint-col "${TIMEPOINT_COL}" \
                 --group-col "${GROUP_COL}" \
-                --participant-col participant_id || {
+                --participant-col participant_id; then
                 echo_error "Mixed-effects modeling failed for ${ATLAS}"
-                exit 1
-            }
+                ATLAS_STATUS[$ATLAS]="failed"
+                ATLAS_STATUS_REASON[$ATLAS]="mixed-effects modeling failed"
+                echo ""
+                continue
+            fi
             echo_success "Mixed-effects models complete"
         else
             echo_info "Skipping mixed-effects models (R not available)"
@@ -227,16 +236,21 @@ run_pipeline() {
 
         # Step 3: UMAP projection (exploratory group x time visualization)
         echo_info "Step 3/3: Running UMAP projection..."
-        python 7_temporal_analysis/scripts/umap_projection.py \
+        if ! python 7_temporal_analysis/scripts/umap_projection.py \
             --input-file "${ATLAS_OUT}/small_worldness/small_worldness_results.csv" \
             --output-dir "${ATLAS_OUT}/umap_results" \
             --timepoint-col "${TIMEPOINT_COL}" \
-            --group-col "${GROUP_COL}" || {
+            --group-col "${GROUP_COL}"; then
             echo_error "UMAP projection failed for ${ATLAS}"
-            exit 1
-        }
+            ATLAS_STATUS[$ATLAS]="failed"
+            ATLAS_STATUS_REASON[$ATLAS]="UMAP projection failed"
+            echo ""
+            continue
+        fi
         echo_success "UMAP projection complete"
         echo ""
+
+        ATLAS_STATUS[$ATLAS]="succeeded"
     done
 }
 
@@ -258,6 +272,22 @@ show_results() {
                 echo_info "  ✓ ${ATLAS_OUT}/${dir}/"
             fi
         done
+    done
+    echo ""
+
+    echo_step "Per-Atlas Summary"
+    for ATLAS in "${ATLASES[@]}"; do
+        case "${ATLAS_STATUS[$ATLAS]:-unknown}" in
+            succeeded)
+                echo_success "${ATLAS}: succeeded"
+                ;;
+            failed)
+                echo_error "${ATLAS}: failed (${ATLAS_STATUS_REASON[$ATLAS]:-unknown reason})"
+                ;;
+            *)
+                echo_info "${ATLAS}: not run"
+                ;;
+        esac
     done
     echo ""
 }
