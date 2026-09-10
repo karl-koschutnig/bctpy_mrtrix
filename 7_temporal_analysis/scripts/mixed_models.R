@@ -127,10 +127,32 @@ fit_mixed_model <- function(data, group_col, timepoint_col, participant_col, met
 }
 
 
-#' Fit mixed models for all metrics, skipping (with a warning) any that fail to converge.
-fit_all_mixed_models <- function(data, group_col, timepoint_col, participant_col, metric_cols) {
+#' Fit mixed models for all metrics, skipping (with a warning) any that fail to converge
+#' or that don't have enough non-missing data to support a group x session model.
+fit_all_mixed_models <- function(data, group_col, timepoint_col, participant_col, metric_cols,
+                                  min_obs_per_cell = 2) {
   results <- list()
+
+  # Minimum floor: a couple of observations per group x session cell, so
+  # lmer()/emmeans() aren't asked to fit/contrast an empty or near-empty cell.
+  n_cells <- max(1, nlevels(data[[group_col]]) * nlevels(data[[timepoint_col]]))
+  min_obs <- n_cells * min_obs_per_cell
+
   for (metric in metric_cols) {
+    required_cols <- c(metric, group_col, timepoint_col, participant_col)
+    n_complete <- sum(complete.cases(data[required_cols]))
+
+    if (n_complete < min_obs) {
+      msg <- paste0(
+        "Skipping ", metric, ": only ", n_complete, "/", nrow(data),
+        " observations non-NaN after removing missing data, insufficient for ",
+        "group x session model (need >= ", min_obs, ")"
+      )
+      cat(msg, "\n")
+      warning(msg)
+      next
+    }
+
     cat("Fitting mixed model for:", metric, "...\n")
     result <- tryCatch(
       fit_mixed_model(data, group_col, timepoint_col, participant_col, metric),
@@ -139,8 +161,10 @@ fit_all_mixed_models <- function(data, group_col, timepoint_col, participant_col
         NULL
       }
     )
-    results[[metric]] <- result
-    if (!is.null(result)) cat("  ✓ Model fitted successfully\n")
+    if (!is.null(result)) {
+      results[[metric]] <- result
+      cat("  ✓ Model fitted successfully\n")
+    }
   }
   results
 }
@@ -185,10 +209,22 @@ save_results <- function(results, output_dir, metric_cols) {
 
   for (metric in metric_cols) {
     if (!is.null(results[[metric]])) {
-      stats <- extract_model_stats(results[[metric]])
+      stats <- tryCatch(
+        extract_model_stats(results[[metric]]),
+        error = function(e) {
+          warning(paste("Failed to extract model statistics for", metric, ":", e$message))
+          NULL
+        }
+      )
       if (!is.null(stats)) all_stats[[metric]] <- stats
 
-      contrasts <- extract_contrasts(results[[metric]])
+      contrasts <- tryCatch(
+        extract_contrasts(results[[metric]]),
+        error = function(e) {
+          warning(paste("Failed to extract contrasts for", metric, ":", e$message))
+          NULL
+        }
+      )
       if (!is.null(contrasts)) all_contrasts[[metric]] <- contrasts
     }
   }
