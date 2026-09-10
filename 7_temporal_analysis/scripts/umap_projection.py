@@ -145,26 +145,29 @@ def run_umap(data, n_components=2, n_neighbors=15, min_dist=0.1, random_state=42
     return embedding
 
 
-def calculate_timepoint_averages(data, timepoint_col='session', metric_cols=None):
+def calculate_timepoint_averages(data, timepoint_col='session', group_col=None, metric_cols=None):
     """
-    Calculate average metrics for each timepoint.
-    
+    Calculate average metrics for each (group, timepoint) combination.
+
     Args:
-        data: DataFrame with metrics and timepoint column
+        data: DataFrame with metrics and timepoint (and optionally group) columns
         timepoint_col: name of the timepoint column
+        group_col: name of the group column; if given, averages are computed
+            per (group, timepoint) instead of collapsing across groups
         metric_cols: list of metric columns to average (None = all numeric columns)
-    
+
     Returns:
-        averages: DataFrame with one row per timepoint, containing average metrics
+        averages: DataFrame with one row per (group, timepoint) [or per
+            timepoint if group_col is None], containing average metrics
     """
+    group_keys = [group_col, timepoint_col] if group_col else [timepoint_col]
+
     if metric_cols is None:
-        # Get all numeric columns except timepoint_col
-        metric_cols = [col for col in data.select_dtypes(include=[np.number]).columns 
-                      if col != timepoint_col]
-    
-    # Group by timepoint and calculate mean
-    averages = data.groupby(timepoint_col)[metric_cols].mean().reset_index()
-    
+        exclude = set(group_keys)
+        metric_cols = [col for col in data.select_dtypes(include=[np.number]).columns
+                      if col not in exclude]
+
+    averages = data.groupby(group_keys)[metric_cols].mean().reset_index()
     return averages
 
 
@@ -350,36 +353,42 @@ def plot_timepoint_averages(averages, umap_cols=['umap_1', 'umap_2'],
 # ============================================================================
 
 def process_umap_projection(input_file, output_dir, timepoint_col='session',
-                           metric_cols=None, n_components=2, n_neighbors=15,
+                           group_col=None, metric_cols=None, n_components=2, n_neighbors=15,
                            min_dist=0.1, random_state=42, color_col=None):
     """
     Main processing function for UMAP projection.
-    
+
     Args:
         input_file: path to input CSV/parquet file with metrics
         output_dir: directory to save outputs
         timepoint_col: column name for timepoints
+        group_col: column name for groups; when given, trajectory averages
+            are computed per (group, timepoint) instead of collapsing
+            across groups
         metric_cols: list of metric columns to use (None = auto-detect)
         n_components: number of UMAP dimensions
         n_neighbors: UMAP n_neighbors parameter
         min_dist: UMAP min_dist parameter
         random_state: random seed
-        color_col: column to use for coloring
-    
+        color_col: column to use for coloring in plots (defaults to group_col or timepoint_col)
+
     Returns:
-        results: DataFrame with UMAP coordinates
+        (data, averages): DataFrames with per-subject and per-(group,timepoint)
+            UMAP coordinates respectively. Turning-point detection is not run
+            here - it requires a continuous covariate with many distinct
+            values, which a fixed-timepoint design doesn't have.
     """
     # Load data
     if input_file.endswith('.parquet'):
         data = pd.read_parquet(input_file)
     else:
         data = pd.read_csv(input_file)
-    
+
     # Auto-detect metric columns
     if metric_cols is None:
         exclude_cols = ['participant_id', 'session', 'group', 'age', 'sex', timepoint_col]
         metric_cols = [col for col in data.columns if col not in exclude_cols]
-    
+
     # Run UMAP
     embedding = run_umap(
         data[metric_cols],
@@ -388,78 +397,72 @@ def process_umap_projection(input_file, output_dir, timepoint_col='session',
         min_dist=min_dist,
         random_state=random_state
     )
-    
+
     # Add UMAP coordinates to data
     for i in range(n_components):
         data[f'umap_{i+1}'] = embedding[:, i]
-    
-    # Calculate timepoint averages
+
+    # Calculate group x timepoint averages (exploratory trajectory visualization)
+    group_keys = [group_col, timepoint_col] if group_col else [timepoint_col]
     averages = calculate_timepoint_averages(
-        data[metric_cols + [timepoint_col]],
+        data[metric_cols + group_keys],
         timepoint_col=timepoint_col,
+        group_col=group_col,
         metric_cols=metric_cols
     )
-    
-    # Add UMAP coordinates to averages
+
+    # Add average UMAP coordinates per (group, timepoint)
     for i in range(n_components):
-        # Calculate average UMAP coordinates per timepoint
-        umap_avgs = data.groupby(timepoint_col)[f'umap_{i+1}'].mean().reset_index()
-        averages[f'umap_{i+1}'] = umap_avgs[f'umap_{i+1}']
-    
-    # Detect turning points on timepoint averages
-    if n_components >= 2:
-        embedding_2d = averages[[f'umap_{i+1}' for i in range(min(2, n_components))]].values
-        turning_indices = detect_turning_points(embedding_2d)
-        turning_timepoints = [averages[timepoint_col].iloc[idx] for idx in turning_indices]
-    else:
-        turning_timepoints = []
-    
+        umap_avgs = data.groupby(group_keys)[f'umap_{i+1}'].mean().reset_index()
+        averages = averages.merge(umap_avgs, on=group_keys, how='left')
+
     # Save outputs
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Save UMAP coordinates
     umap_coords_file = output_dir / "umap_coordinates.csv"
     data.to_csv(umap_coords_file, index=False)
-    
+
     # Save parquet if available
     try:
         data.to_parquet(output_dir / "umap_coordinates.parquet", index=False)
     except ImportError:
         pass
-    
-    # Save timepoint averages
-    averages_file = output_dir / "umap_timepoint_averages.csv"
+
+    # Save group x timepoint averages
+    averages_file = output_dir / "umap_group_timepoint_averages.csv"
     averages.to_csv(averages_file, index=False)
-    
-    # Save turning points
-    turning_file = output_dir / "turning_points.json"
-    with open(turning_file, 'w') as f:
-        json.dump({
-            'turning_timepoints': turning_timepoints,
-            'turning_indices': turning_indices
-        }, f, indent=2)
-    
+
     # Create visualizations
     if MATPLOTLIB_AVAILABLE:
         # Plot all points
         plot_umap_trajectory(
             data,
             umap_cols=[f'umap_{i+1}' for i in range(min(2, n_components))],
-            color_col=color_col or timepoint_col,
+            color_col=color_col or group_col or timepoint_col,
             output_path=output_dir / "umap_trajectory_all.png",
             show_labels=False
         )
-        
-        # Plot timepoint averages with arrows
-        plot_timepoint_averages(
-            averages,
-            umap_cols=[f'umap_{i+1}' for i in range(min(2, n_components))],
-            color_col=color_col or timepoint_col,
-            output_path=output_dir / "umap_trajectory_averages.png"
-        )
-    
-    return data, averages, turning_timepoints
+
+        # Plot timepoint-average trajectory with arrows, one plot per group if available
+        if group_col and group_col in averages.columns:
+            for group_value, group_df in averages.groupby(group_col):
+                plot_timepoint_averages(
+                    group_df,
+                    umap_cols=[f'umap_{i+1}' for i in range(min(2, n_components))],
+                    color_col=timepoint_col,
+                    output_path=output_dir / f"umap_trajectory_averages_{group_value}.png"
+                )
+        else:
+            plot_timepoint_averages(
+                averages,
+                umap_cols=[f'umap_{i+1}' for i in range(min(2, n_components))],
+                color_col=color_col or timepoint_col,
+                output_path=output_dir / "umap_trajectory_averages.png"
+            )
+
+    return data, averages
 
 
 # ============================================================================
@@ -510,25 +513,26 @@ def main():
                 args.random_state = config['umap']['random_state']
     
     # Run UMAP
-    data, averages, turning_points = process_umap_projection(
+    data, averages = process_umap_projection(
         input_file=args.input_file,
         output_dir=args.output_dir,
         timepoint_col=args.timepoint_col,
+        group_col=args.group_col,
         color_col=args.group_col,
         n_components=args.n_components,
         n_neighbors=args.n_neighbors,
         min_dist=args.min_dist,
         random_state=args.random_state
     )
-    
+
     print(f"UMAP projection complete")
     print(f"Input: {args.input_file}")
     print(f"Output: {args.output_dir}")
     print(f"Samples: {len(data)}")
     print(f"Dimensions: {args.n_components}")
     print(f"Timepoints: {data[args.timepoint_col].nunique()}")
-    print(f"Turning points detected: {len(turning_points)}")
-    print(f"Turning timepoints: {turning_points}")
+    if args.group_col in data.columns:
+        print(f"Groups: {data[args.group_col].nunique()}")
 
 
 if __name__ == "__main__":

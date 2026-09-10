@@ -53,6 +53,53 @@ def temp_output_dir():
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def test_calculate_timepoint_averages_is_group_aware():
+    """Averaging must not collapse across groups - that erases the group signal."""
+    from scripts.umap_projection import calculate_timepoint_averages
+
+    data = pd.DataFrame({
+        "session": ["ses-1", "ses-1", "ses-1", "ses-1"],
+        "group":   ["ctrl", "ctrl", "g1_2w", "g1_2w"],
+        "density": [0.10, 0.20, 0.50, 0.60],
+    })
+
+    averages = calculate_timepoint_averages(data, timepoint_col="session", group_col="group")
+
+    assert len(averages) == 2  # one row per (group, session), not one row per session
+    ctrl_row = averages[averages["group"] == "ctrl"].iloc[0]
+    g1_row = averages[averages["group"] == "g1_2w"].iloc[0]
+    assert ctrl_row["density"] == pytest.approx(0.15)
+    assert g1_row["density"] == pytest.approx(0.55)
+
+
+def test_process_umap_projection_does_not_emit_turning_points(tmp_path):
+    """Turning-point detection is retired from the active pipeline."""
+    from scripts.umap_projection import process_umap_projection
+
+    rng = np.random.default_rng(0)
+    n = 30
+    df = pd.DataFrame({
+        "participant_id": [f"sub-{i:03d}" for i in range(n)],
+        "session": np.tile(["ses-1", "ses-2", "ses-3"], n // 3),
+        "group": np.tile(["ctrl", "g1_2w", "g2_4w"], n // 3),
+        "density": rng.random(n),
+        "global_efficiency": rng.random(n),
+    })
+    input_file = tmp_path / "metrics.csv"
+    df.to_csv(input_file, index=False)
+    output_dir = tmp_path / "out"
+
+    data, averages = process_umap_projection(
+        str(input_file), str(output_dir),
+        timepoint_col="session", group_col="group",
+        n_components=2, n_neighbors=5,
+    )
+
+    assert not (output_dir / "turning_points.json").exists()
+    assert "group" in averages.columns
+    assert set(averages["session"].unique()) == {"ses-1", "ses-2", "ses-3"}
+
+
 # ============================================================================
 # TESTS: run_umap function
 # ============================================================================
