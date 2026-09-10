@@ -143,7 +143,7 @@ main() {
     echo_success "R dependencies installed"
     echo ""
 
-    # Step 7: Finalize
+    # Step 6: Finalize
     echo_header
     echo_success "Installation Complete!"
     echo ""
