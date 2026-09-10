@@ -1,0 +1,46 @@
+{
+  "inputs": {
+    "data_dir": "/Volumes/Evo/data/129/connectomics/bct_input/Schaefer200",
+    "metadata_file": "data/processed/metadata.csv",
+    "metrics_file": "outputs/global_metrics/metrics.parquet"
+  },
+  "outputs": {
+    "output_dir": "outputs/temporal_analysis",
+    "gam_dir": "outputs/temporal_analysis/gam_results",
+    "umap_dir": "outputs/temporal_analysis/umap_results",
+    "turning_dir": "outputs/temporal_analysis/turning_points",
+    "small_world_dir": "outputs/temporal_analysis/small_worldness"
+  },
+  "temporal": {
+    "timepoint_col": "session",
+    "group_col": "group",
+    "n_timepoints": 3,
+    "metric_cols": [
+      "density",
+      "charpath", 
+      "global_efficiency",
+      "clustering_coef",
+      "modularity",
+      "transitivity",
+      "strength",
+      "degree"
+    ],
+    "atlas": "Schaefer200",
+    "n_nodes": 200
+  },
+  "small_worldness": {
+    "n_null_models": 100,
+    "random_state": 42
+  },
+  "umap": {
+    "n_components": 2,
+    "n_neighbors": 15,
+    "min_dist": 0.1,
+    "random_state": 42
+  },
+  "gam": {
+    "smooth_terms": ["session"],
+    "fixed_effects": ["group", "sex", "age"],
+    "family": "gaussian"
+  }
+}
