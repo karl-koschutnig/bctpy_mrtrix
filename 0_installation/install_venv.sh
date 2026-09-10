@@ -121,5 +121,9 @@ echo ""
 # Generate uv.lock for reproducibility
 echo "Generating uv.lock for reproducible installs..."
 cd "$ROOT_DIR"
-uv pip compile pyproject.toml --all-extras -o uv.lock
-echo "✓ uv.lock updated"
+if [ -f "uv.lock" ]; then
+    echo "✓ uv.lock already exists"
+else
+    uv pip compile pyproject.toml --all-extras -o uv.lock
+echo "✓ uv.lock created"
+fi

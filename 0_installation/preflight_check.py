@@ -165,11 +165,13 @@ def main() -> None:
     
     # Check uv.lock if requested
     if args.uv_lock:
-        uv_lock_path = spec_dir / "uv.lock"
+        # uv.lock is at repository root, not in 0_installation/
+        uv_lock_path = spec_dir.parent / "uv.lock"
         if uv_lock_path.exists():
             print("✓ uv.lock found (reproducible environment configured)")
         else:
-            print("⚠ uv.lock not found - run 'uv pip compile pyproject.toml -o uv.lock' for reproducibility")
+            print("⚠ uv.lock not found at repo root")
+            print("  Generate with: uv pip compile pyproject.toml --all-extras -o uv.lock")
 
 
 if __name__ == "__main__":
