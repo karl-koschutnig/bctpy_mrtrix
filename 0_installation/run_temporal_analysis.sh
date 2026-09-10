@@ -8,8 +8,8 @@
 #
 # Requirements:
 #   - Python environment activated (run install.sh first)
-#   - R installed for GAM modeling
-#   - Metadata file created
+#   - R installed for mixed-effects modeling (via renv, see 0_installation/setup_r_env.R)
+#   - Metadata file created (see data_processing/build_metadata.py)
 #
 # Usage:
 #   ./0_installation/run_temporal_analysis.sh
@@ -35,9 +35,15 @@ CONNECTOMES_DIR="${CONNECTOMES_DIR:-/Volumes/Evo/data/129/connectomics/bct_input
 
 OUTPUTS_DIR="${ROOT_DIR}/outputs/temporal_analysis"
 
-# Atlas settings
-ATLAS="Schaefer200"
-N_NODES=200
+# Atlases to process (node counts confirmed from the real connectome files)
+ATLASES=(AAL3 Gordon333 HCP-MMP Schaefer200 Schaefer400)
+declare -A ATLAS_NODES=(
+    [AAL3]=166
+    [Gordon333]=333
+    [HCP-MMP]=360
+    [Schaefer200]=200
+    [Schaefer400]=400
+)
 
 # Study settings
 TIMEPOINT_COL="session"
@@ -127,7 +133,7 @@ check_environment() {
         echo_success "R: $(Rscript --version 2>&1 | head -1)"
         HAS_R=true
     else
-        echo_info "R not found - GAM modeling will be skipped"
+        echo_info "R not found - mixed-effects modeling will be skipped"
         echo_info "To install R: brew install r"
         echo_info "Then: Rscript 0_installation/setup_r_env.R  (restores packages via renv; run 0_installation/install.sh to set up everything)"
     fi
@@ -177,93 +183,61 @@ create_metadata() {
 
 run_pipeline() {
     echo_step "Running Temporal Analysis Pipeline"
-    
-    # Step 1: Small-worldness calculation
-    echo_info "Step 1/4: Calculating small-worldness..."
-    echo_info "Data directory: ${CONNECTOMES_DIR}/${ATLAS}"
-    
-    # Check if data directory exists
-    if [[ ! -d "${CONNECTOMES_DIR}/${ATLAS}" ]]; then
-        echo_error "Connectome data directory not found: ${CONNECTOMES_DIR}/${ATLAS}"
-        echo_info "Expected location: /Volumes/Evo/data/129/connectomics/bct_input/Schaefer200"
-        echo_info "Set CONNECTOMES_DIR environment variable to your data location"
-        echo_info "Example: export CONNECTOMES_DIR=/path/to/your/connectomes"
-        exit 1
-    fi
-    
-    python 7_temporal_analysis/scripts/small_worldness.py \
-        --data-dir "${CONNECTOMES_DIR}/${ATLAS}" \
-        --metadata-file "${METADATA_FILE}" \
-        --output-dir "${OUTPUTS_DIR}/small_worldness" \
-        --n-nodes ${N_NODES} || {
-        echo_error "Small-worldness calculation failed"
-        echo_info "Check that connectome files exist in: ${CONNECTOMES_DIR}/${ATLAS}"
-        exit 1
-    }
-    echo_success "Small-worldness complete"
-    echo ""
-    
-    # Step 2: GAM models (if R is available)
-    if $HAS_R; then
-        echo_info "Step 2/4: Fitting GAM models..."
-        echo_command "Rscript 7_temporal_analysis/scripts/gam_models.R \\"
-        echo_command "  --input-file ${OUTPUTS_DIR}/small_worldness/small_worldness_results.csv \\"
-        echo_command "  --output-dir ${OUTPUTS_DIR}/gam_results \\"
-        echo_command "  --timepoint-col ${TIMEPOINT_COL} \\"
-        echo_command "  --group-col ${GROUP_COL}"
-        
-        Rscript 7_temporal_analysis/scripts/gam_models.R \
-            --input-file "${OUTPUTS_DIR}/small_worldness/small_worldness_results.csv" \
-            --output-dir "${OUTPUTS_DIR}/gam_results" \
-            --timepoint-col "${TIMEPOINT_COL}" \
-            --group-col "${GROUP_COL}" || {
-            echo_error "GAM modeling failed"
+
+    for ATLAS in "${ATLASES[@]}"; do
+        N_NODES="${ATLAS_NODES[$ATLAS]}"
+        ATLAS_OUT="${OUTPUTS_DIR}/${ATLAS}"
+
+        echo_step "Atlas: ${ATLAS} (${N_NODES} nodes)"
+
+        if [[ ! -d "${CONNECTOMES_DIR}/${ATLAS}" ]]; then
+            echo_error "Connectome data directory not found: ${CONNECTOMES_DIR}/${ATLAS}"
+            echo_info "Set CONNECTOMES_DIR environment variable to your data location"
+            exit 1
+        fi
+
+        # Step 1: Small-worldness calculation
+        echo_info "Step 1/3: Calculating small-worldness..."
+        python 7_temporal_analysis/scripts/small_worldness.py \
+            --data-dir "${CONNECTOMES_DIR}/${ATLAS}" \
+            --metadata-file "${METADATA_FILE}" \
+            --output-dir "${ATLAS_OUT}/small_worldness" \
+            --n-nodes "${N_NODES}" || {
+            echo_error "Small-worldness calculation failed for ${ATLAS}"
             exit 1
         }
-        echo_success "GAM models complete"
+        echo_success "Small-worldness complete"
+
+        # Step 2: Mixed-effects models (Group x Time)
+        if $HAS_R; then
+            echo_info "Step 2/3: Fitting mixed-effects models..."
+            Rscript 7_temporal_analysis/scripts/mixed_models.R \
+                --input-file "${ATLAS_OUT}/small_worldness/small_worldness_results.csv" \
+                --output-dir "${ATLAS_OUT}/mixed_model_results" \
+                --timepoint-col "${TIMEPOINT_COL}" \
+                --group-col "${GROUP_COL}" \
+                --participant-col participant_id || {
+                echo_error "Mixed-effects modeling failed for ${ATLAS}"
+                exit 1
+            }
+            echo_success "Mixed-effects models complete"
+        else
+            echo_info "Skipping mixed-effects models (R not available)"
+        fi
+
+        # Step 3: UMAP projection (exploratory group x time visualization)
+        echo_info "Step 3/3: Running UMAP projection..."
+        python 7_temporal_analysis/scripts/umap_projection.py \
+            --input-file "${ATLAS_OUT}/small_worldness/small_worldness_results.csv" \
+            --output-dir "${ATLAS_OUT}/umap_results" \
+            --timepoint-col "${TIMEPOINT_COL}" \
+            --group-col "${GROUP_COL}" || {
+            echo_error "UMAP projection failed for ${ATLAS}"
+            exit 1
+        }
+        echo_success "UMAP projection complete"
         echo ""
-    else
-        echo_info "Skipping GAM models (R not available)"
-        echo ""
-    fi
-    
-    # Step 3: UMAP projection
-    echo_info "Step 3/4: Running UMAP projection..."
-    echo_command "python 7_temporal_analysis/scripts/umap_projection.py \\"
-    echo_command "  --input-file ${OUTPUTS_DIR}/small_worldness/small_worldness_results.csv \\"
-    echo_command "  --output-dir ${OUTPUTS_DIR}/umap_results \\"
-    echo_command "  --timepoint-col ${TIMEPOINT_COL} \\"
-    echo_command "  --group-col ${GROUP_COL}"
-    
-    python 7_temporal_analysis/scripts/umap_projection.py \
-        --input-file "${OUTPUTS_DIR}/small_worldness/small_worldness_results.csv" \
-        --output-dir "${OUTPUTS_DIR}/umap_results" \
-        --timepoint-col "${TIMEPOINT_COL}" \
-        --group-col "${GROUP_COL}" || {
-        echo_error "UMAP projection failed"
-        exit 1
-    }
-    echo_success "UMAP projection complete"
-    echo ""
-    
-    # Step 4: Turning point detection
-    echo_info "Step 4/4: Detecting turning points..."
-    echo_command "python 7_temporal_analysis/scripts/turning_points.py \\"
-    echo_command "  --input-file ${OUTPUTS_DIR}/umap_results/umap_coordinates.csv \\"
-    echo_command "  --output-dir ${OUTPUTS_DIR}/turning_points \\"
-    echo_command "  --timepoint-col ${TIMEPOINT_COL} \\"
-    echo_command "  --group-col ${GROUP_COL}"
-    
-    python 7_temporal_analysis/scripts/turning_points.py \
-        --input-file "${OUTPUTS_DIR}/umap_results/umap_coordinates.csv" \
-        --output-dir "${OUTPUTS_DIR}/turning_points" \
-        --timepoint-col "${TIMEPOINT_COL}" \
-        --group-col "${GROUP_COL}" || {
-        echo_error "Turning point detection failed"
-        exit 1
-    }
-    echo_success "Turning point detection complete"
-    echo ""
+    done
 }
 
 # ============================================================================
@@ -273,42 +247,18 @@ run_pipeline() {
 show_results() {
     echo_step "Pipeline Complete!"
     echo ""
-    
-    echo_success "Results saved to: ${OUTPUTS_DIR}/"
+    echo_success "Results saved to: ${OUTPUTS_DIR}/<atlas>/"
     echo ""
-    
-    echo_info "Output directories:"
-    for dir in small_worldness gam_results umap_results turning_points; do
-        if [[ -d "${OUTPUTS_DIR}/${dir}" ]]; then
-            echo_info "  ✓ ${OUTPUTS_DIR}/${dir}/"
-        fi
+
+    for ATLAS in "${ATLASES[@]}"; do
+        ATLAS_OUT="${OUTPUTS_DIR}/${ATLAS}"
+        echo_info "${ATLAS}:"
+        for dir in small_worldness mixed_model_results umap_results; do
+            if [[ -d "${ATLAS_OUT}/${dir}" ]]; then
+                echo_info "  ✓ ${ATLAS_OUT}/${dir}/"
+            fi
+        done
     done
-    echo ""
-    
-    echo_info "Key output files:"
-    if [[ -f "${OUTPUTS_DIR}/small_worldness/small_worldness_results.csv" ]]; then
-        echo_info "  ✓ small_worldness_results.csv"
-    fi
-    if [[ -f "${OUTPUTS_DIR}/gam_results/gam_model_statistics.csv" ]]; then
-        echo_info "  ✓ gam_model_statistics.csv"
-    fi
-    if [[ -f "${OUTPUTS_DIR}/umap_results/umap_coordinates.csv" ]]; then
-        echo_info "  ✓ umap_coordinates.csv"
-    fi
-    if [[ -f "${OUTPUTS_DIR}/turning_points/turning_points.json" ]]; then
-        echo_info "  ✓ turning_points.json"
-    fi
-    if [[ -f "${OUTPUTS_DIR}/umap_results/umap_trajectory_averages.png" ]]; then
-        echo_info "  ✓ umap_trajectory_averages.png"
-    fi
-    if [[ -f "${OUTPUTS_DIR}/turning_points/trajectory_with_turning_points.png" ]]; then
-        echo_info "  ✓ trajectory_with_turning_points.png"
-    fi
-    echo ""
-    
-    echo_info "To view results:"
-    echo_info "  open ${OUTPUTS_DIR}/umap_results/umap_trajectory_averages.png"
-    echo_info "  open ${OUTPUTS_DIR}/turning_points/trajectory_with_turning_points.png"
     echo ""
 }
 
