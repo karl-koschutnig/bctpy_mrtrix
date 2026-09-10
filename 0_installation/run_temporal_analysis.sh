@@ -27,6 +27,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${ROOT_DIR}/data/processed"
 METADATA_FILE="${DATA_DIR}/metadata.csv"
+GROUPS_EXCEL="${ROOT_DIR}/data/raw/ID_2w_4w_groups.xlsx"
 
 # Default connectomes path (can be overridden by setting CONNECTOMES_DIR)
 # Default: use the standard study data location
@@ -140,31 +141,26 @@ check_environment() {
 
 create_metadata() {
     echo_step "Checking Metadata File"
-    
+
     if [[ ! -f "$METADATA_FILE" ]]; then
         echo_info "Metadata file not found: $METADATA_FILE"
-        echo_info "Creating template metadata.csv..."
-        
-        mkdir -p "$DATA_DIR"
-        
-        # Create a template metadata file
-        cat > "$METADATA_FILE" << 'EOF'
-participant_id,session,group,age,sex
-sub-001,ses-1,ctrl,25,0
-sub-001,ses-2,ctrl,25,0
-sub-001,ses-3,ctrl,25,0
-sub-002,ses-1,2w,30,1
-sub-002,ses-2,2w,30,1
-sub-002,ses-3,2w,30,1
-sub-003,ses-1,4w,28,0
-sub-003,ses-2,4w,28,0
-sub-003,ses-3,4w,28,0
-EOF
-        
-        echo_success "Template metadata.csv created at: $METADATA_FILE"
-        echo_info "Please edit this file with your actual participant data."
-        echo_info "Format: participant_id,session,group,age,sex"
-        echo_info "Groups: ctrl (control), 2w (2-week), 4w (4-week)"
+
+        if [[ ! -f "$GROUPS_EXCEL" ]]; then
+            echo_error "Group-assignment spreadsheet not found: $GROUPS_EXCEL"
+            echo_info "Place ID_2w_4w_groups.xlsx at that path, or set GROUPS_EXCEL."
+            exit 1
+        fi
+
+        echo_info "Building metadata.csv from ${GROUPS_EXCEL}..."
+        python data_processing/build_metadata.py \
+            --excel "$GROUPS_EXCEL" \
+            --bct-input-dir "$CONNECTOMES_DIR" \
+            --atlas AAL3 \
+            --out "$METADATA_FILE" || {
+            echo_error "Failed to build metadata from group-assignment spreadsheet"
+            exit 1
+        }
+        echo_success "metadata.csv built at: $METADATA_FILE"
         echo ""
     else
         echo_success "Metadata file found: $METADATA_FILE"
