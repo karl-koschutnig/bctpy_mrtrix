@@ -45,6 +45,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Local
+sys.path.append(str(Path(__file__).resolve().parent.parent / "1_utilities"))
 from group_detection import detect_or_ask_groups
 
 

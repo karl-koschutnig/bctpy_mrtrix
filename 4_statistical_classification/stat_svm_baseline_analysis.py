@@ -42,6 +42,7 @@ from sklearn.svm import SVC
 warnings.filterwarnings("ignore")
 
 # Local
+sys.path.append(str(Path(__file__).resolve().parent.parent / "1_utilities"))
 from group_detection import detect_or_ask_groups
 
 # ============================================================================
