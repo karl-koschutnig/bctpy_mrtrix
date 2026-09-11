@@ -26,14 +26,19 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${ROOT_DIR}/data/processed"
-METADATA_FILE="${DATA_DIR}/metadata.csv"
 GROUPS_EXCEL="${ROOT_DIR}/data/raw/ID_2w_4w_groups.xlsx"
 
-# Default connectomes path (can be overridden by setting CONNECTOMES_DIR)
-# Default: use the standard study data location
+# Overridable via environment, so an alternative analysis (e.g. a 3-arm
+# collapse) can reuse this script with its own metadata + output tree.
+METADATA_FILE="${METADATA_FILE:-${DATA_DIR}/metadata.csv}"
 CONNECTOMES_DIR="${CONNECTOMES_DIR:-/Volumes/Evo/data/129/connectomics/bct_input}"
+OUTPUTS_DIR="${OUTPUTS_DIR:-${ROOT_DIR}/outputs/temporal_analysis}"
 
-OUTPUTS_DIR="${ROOT_DIR}/outputs/temporal_analysis"
+# Demographics: if this file exists, age/sex/height/weight are merged into the
+# metadata and the covariate-adjusted robustness models are run.
+DEMOGRAPHICS_FILE="${DEMOGRAPHICS_FILE:-${ROOT_DIR}/data/raw/participants_new_groups_02.04.25.xlsx}"
+COVARIATE_COLS="${COVARIATE_COLS:-age sex}"
+HUB_FRAC="${HUB_FRAC:-0.15}"
 
 # Atlases to process (node counts confirmed from the real connectome files)
 ATLASES=(AAL3 Gordon333 HCP-MMP Schaefer200 Schaefer400)
@@ -43,6 +48,19 @@ declare -A ATLAS_NODES=(
     [HCP-MMP]=360
     [Schaefer200]=200
     [Schaefer400]=400
+)
+
+# Nodes to drop before computing graph metrics: regions with >25% of the real
+# cohort's subject-sessions showing zero streamlines to any other region
+# (confirmed via bct_input/<atlas>/*.count.roi_normalized.csv). Leaving these
+# in makes characteristic path length infinite for most/all subjects. Recompute
+# if the underlying tractography/atlas data changes.
+declare -A ATLAS_EXCLUDE_NODES=(
+    [AAL3]="128"
+    [Gordon333]="16,124,185,279,284,287"
+    [HCP-MMP]="211,212,213"
+    [Schaefer200]=""
+    [Schaefer400]=""
 )
 
 # Study settings
@@ -178,6 +196,29 @@ create_metadata() {
 }
 
 # ============================================================================
+# MERGE DEMOGRAPHICS
+# ============================================================================
+
+HAS_DEMOGRAPHICS=false
+
+merge_demographics_step() {
+    if [[ ! -f "$DEMOGRAPHICS_FILE" ]]; then
+        echo_info "No demographics file at ${DEMOGRAPHICS_FILE} - skipping age/sex covariates"
+        echo ""
+        return 0
+    fi
+    echo_step "Merging demographics"
+    if python 7_temporal_analysis/scripts/merge_demographics.py \
+        --demographics "$DEMOGRAPHICS_FILE" --metadata "$METADATA_FILE"; then
+        HAS_DEMOGRAPHICS=true
+        echo_success "age / sex merged into $METADATA_FILE"
+    else
+        echo_error "demographics merge failed - continuing without covariates"
+    fi
+    echo ""
+}
+
+# ============================================================================
 # RUN TEMPORAL ANALYSIS PIPELINE
 # ============================================================================
 
@@ -189,6 +230,7 @@ run_pipeline() {
 
     for ATLAS in "${ATLASES[@]}"; do
         N_NODES="${ATLAS_NODES[$ATLAS]}"
+        EXCLUDE_NODES="${ATLAS_EXCLUDE_NODES[$ATLAS]}"
         ATLAS_OUT="${OUTPUTS_DIR}/${ATLAS}"
 
         echo_step "Atlas: ${ATLAS} (${N_NODES} nodes)"
@@ -199,13 +241,16 @@ run_pipeline() {
             exit 1
         fi
 
-        # Step 1: Small-worldness calculation
-        echo_info "Step 1/3: Calculating small-worldness..."
-        if ! python 7_temporal_analysis/scripts/small_worldness.py \
-            --data-dir "${CONNECTOMES_DIR}/${ATLAS}" \
-            --metadata-file "${METADATA_FILE}" \
-            --output-dir "${ATLAS_OUT}/small_worldness" \
-            --n-nodes "${N_NODES}"; then
+        # Step 1: Small-worldness calculation (degree-preserving null models)
+        echo_info "Step 1/4: Calculating small-worldness..."
+        SW_ARGS=(
+            --data-dir "${CONNECTOMES_DIR}/${ATLAS}"
+            --metadata-file "${METADATA_FILE}"
+            --output-dir "${ATLAS_OUT}/small_worldness"
+            --n-nodes "${N_NODES}"
+        )
+        if [[ -n "$EXCLUDE_NODES" ]]; then SW_ARGS+=(--exclude-nodes "$EXCLUDE_NODES"); fi
+        if ! python 7_temporal_analysis/scripts/small_worldness.py "${SW_ARGS[@]}"; then
             echo_error "Small-worldness calculation failed for ${ATLAS}"
             ATLAS_STATUS[$ATLAS]="failed"
             ATLAS_STATUS_REASON[$ATLAS]="small-worldness calculation failed"
@@ -214,11 +259,60 @@ run_pipeline() {
         fi
         echo_success "Small-worldness complete"
 
-        # Step 2: Mixed-effects models (Group x Time)
+        # Step 2: Organizational measure battery (merges small-worldness in)
+        echo_info "Step 2/4: Computing organizational measures..."
+        OM_ARGS=(
+            --data-dir "${CONNECTOMES_DIR}/${ATLAS}"
+            --metadata-file "${METADATA_FILE}"
+            --output-dir "${ATLAS_OUT}/organizational_measures"
+            --n-nodes "${N_NODES}"
+        )
+        if [[ -n "$EXCLUDE_NODES" ]]; then OM_ARGS+=(--exclude-nodes "$EXCLUDE_NODES"); fi
+        if ! python 7_temporal_analysis/scripts/organizational_measures.py "${OM_ARGS[@]}"; then
+            echo_error "Organizational measures failed for ${ATLAS}"
+            ATLAS_STATUS[$ATLAS]="failed"
+            ATLAS_STATUS_REASON[$ATLAS]="organizational measures failed"
+            echo ""
+            continue
+        fi
+        echo_success "Organizational measures complete"
+
+        OM_CSV="${ATLAS_OUT}/organizational_measures/organizational_measures_results.csv"
+
+        # Step 2b: Hub / rich-club measures (focused hypothesis family). Merged
+        # into the organizational-measures CSV so the models below pick them up.
+        echo_info "Step 2b/8: Computing hub / rich-club measures..."
+        HUB_ARGS=(
+            --data-dir "${CONNECTOMES_DIR}/${ATLAS}"
+            --metadata-file "${METADATA_FILE}"
+            --output-dir "${ATLAS_OUT}/hub_measures"
+            --n-nodes "${N_NODES}" --hub-frac "${HUB_FRAC}"
+        )
+        if [[ -n "$EXCLUDE_NODES" ]]; then HUB_ARGS+=(--exclude-nodes "$EXCLUDE_NODES"); fi
+        if python 7_temporal_analysis/scripts/hub_measures.py "${HUB_ARGS[@]}"; then
+            python - "${ATLAS_OUT}/hub_measures/hub_measures_results.csv" "${OM_CSV}" <<'PY'
+import sys, pandas as pd
+hub, om = sys.argv[1], sys.argv[2]
+h = pd.read_csv(hub)
+drop = ("participant_id", "session", "group", "age", "sex", "height_cm", "weight_kg")
+hub_cols = [c for c in h.columns if c not in drop]
+d = pd.read_csv(om).drop(columns=[c for c in hub_cols], errors="ignore")
+d.merge(h[["participant_id", "session", *hub_cols]], on=["participant_id", "session"],
+        how="left").to_csv(om, index=False)
+PY
+            echo_success "Hub measures complete (merged into organizational measures)"
+        else
+            echo_error "Hub measures failed for ${ATLAS} (continuing without them)"
+        fi
+
+        COV_ARGS=()
+        if $HAS_DEMOGRAPHICS; then COV_ARGS=(--covariate-cols ${COVARIATE_COLS}); fi
+
+        # Step 3: Mixed-effects models (Group x Time) over the full measure set
         if $HAS_R; then
-            echo_info "Step 2/3: Fitting mixed-effects models..."
+            echo_info "Step 3/8: Fitting mixed-effects models (primary)..."
             if ! Rscript 7_temporal_analysis/scripts/mixed_models.R \
-                --input-file "${ATLAS_OUT}/small_worldness/small_worldness_results.csv" \
+                --input-file "${OM_CSV}" \
                 --output-dir "${ATLAS_OUT}/mixed_model_results" \
                 --timepoint-col "${TIMEPOINT_COL}" \
                 --group-col "${GROUP_COL}" \
@@ -230,14 +324,59 @@ run_pipeline() {
                 continue
             fi
             echo_success "Mixed-effects models complete"
+
+            # Step 4: Longitudinal SEM (latent growth curves) - complementary,
+            # non-fatal: an inadmissible fit for one measure shouldn't sink the atlas.
+            echo_info "Step 4/8: Fitting longitudinal SEM (primary)..."
+            if ! Rscript 7_temporal_analysis/scripts/longitudinal_sem.R \
+                --input-file "${OM_CSV}" \
+                --output-dir "${ATLAS_OUT}/sem_results" \
+                --timepoint-col "${TIMEPOINT_COL}" \
+                --group-col "${GROUP_COL}" \
+                --participant-col participant_id; then
+                echo_error "Longitudinal SEM failed for ${ATLAS} (continuing)"
+            else
+                echo_success "Longitudinal SEM complete"
+            fi
+
+            # Step 5: Robustness models (non-fatal). Covariate-adjusted +
+            # baseline-adjusted lme, covariate-adjusted + latent-basis SEM,
+            # and the pre-post difference-score model.
+            echo_info "Step 5/8: Robustness models (adjusted / baseline / latent-basis / difference)..."
+            Rscript 7_temporal_analysis/scripts/mixed_models.R --input-file "${OM_CSV}" \
+                --output-dir "${ATLAS_OUT}/mixed_model_results_adj" \
+                --timepoint-col "${TIMEPOINT_COL}" --group-col "${GROUP_COL}" \
+                --participant-col participant_id "${COV_ARGS[@]}" \
+                || echo_error "  adjusted lme failed (continuing)"
+            Rscript 7_temporal_analysis/scripts/mixed_models.R --input-file "${OM_CSV}" \
+                --output-dir "${ATLAS_OUT}/mixed_model_results_baseline" \
+                --timepoint-col "${TIMEPOINT_COL}" --group-col "${GROUP_COL}" \
+                --participant-col participant_id --baseline-adjust "${COV_ARGS[@]}" \
+                || echo_error "  baseline-adjusted lme failed (continuing)"
+            Rscript 7_temporal_analysis/scripts/longitudinal_sem.R --input-file "${OM_CSV}" \
+                --output-dir "${ATLAS_OUT}/sem_results_adj" \
+                --timepoint-col "${TIMEPOINT_COL}" --group-col "${GROUP_COL}" \
+                --participant-col participant_id "${COV_ARGS[@]}" \
+                || echo_error "  adjusted SEM failed (continuing)"
+            Rscript 7_temporal_analysis/scripts/longitudinal_sem.R --input-file "${OM_CSV}" \
+                --output-dir "${ATLAS_OUT}/sem_results_latentbasis" \
+                --timepoint-col "${TIMEPOINT_COL}" --group-col "${GROUP_COL}" \
+                --participant-col participant_id --latent-basis "${COV_ARGS[@]}" \
+                || echo_error "  latent-basis SEM failed (continuing)"
+            Rscript 7_temporal_analysis/scripts/difference_scores.R --input-file "${OM_CSV}" \
+                --output-dir "${ATLAS_OUT}/difference_scores" \
+                --timepoint-col "${TIMEPOINT_COL}" --group-col "${GROUP_COL}" \
+                --participant-col participant_id "${COV_ARGS[@]}" \
+                || echo_error "  difference-score model failed (continuing)"
+            echo_success "Robustness models complete"
         else
-            echo_info "Skipping mixed-effects models (R not available)"
+            echo_info "Skipping mixed-effects models + SEM (R not available)"
         fi
 
-        # Step 3: UMAP projection (exploratory group x time visualization)
-        echo_info "Step 3/3: Running UMAP projection..."
+        # Step 6: UMAP projection (exploratory group x time visualization)
+        echo_info "Step 6/8: Running UMAP projection..."
         if ! python 7_temporal_analysis/scripts/umap_projection.py \
-            --input-file "${ATLAS_OUT}/small_worldness/small_worldness_results.csv" \
+            --input-file "${OM_CSV}" \
             --output-dir "${ATLAS_OUT}/umap_results" \
             --timepoint-col "${TIMEPOINT_COL}" \
             --group-col "${GROUP_COL}"; then
@@ -252,6 +391,14 @@ run_pipeline() {
 
         ATLAS_STATUS[$ATLAS]="succeeded"
     done
+
+    # Step 7/8: FDR correction across atlases / measures / designs
+    if $HAS_R || true; then
+        echo_step "FDR correction"
+        python 7_temporal_analysis/scripts/fdr_correct.py \
+            --outputs-root "$(dirname "$OUTPUTS_DIR")" \
+            || echo_error "FDR correction failed (continuing)"
+    fi
 }
 
 # ============================================================================
@@ -267,7 +414,10 @@ show_results() {
     for ATLAS in "${ATLASES[@]}"; do
         ATLAS_OUT="${OUTPUTS_DIR}/${ATLAS}"
         echo_info "${ATLAS}:"
-        for dir in small_worldness mixed_model_results umap_results; do
+        for dir in small_worldness organizational_measures hub_measures \
+                   mixed_model_results mixed_model_results_adj mixed_model_results_baseline \
+                   sem_results sem_results_adj sem_results_latentbasis \
+                   difference_scores umap_results; do
             if [[ -d "${ATLAS_OUT}/${dir}" ]]; then
                 echo_info "  ✓ ${ATLAS_OUT}/${dir}/"
             fi
@@ -301,6 +451,7 @@ main() {
     
     check_environment
     create_metadata
+    merge_demographics_step
     run_pipeline
     show_results
     

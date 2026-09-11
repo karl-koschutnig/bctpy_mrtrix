@@ -175,6 +175,42 @@ class TestCalculateSmallWorldness:
 # TESTS: process_connectome_directory function
 # ============================================================================
 
+class TestFindConnectomeFiles:
+    """Tests for connectome file discovery / weight-variant preference."""
+
+    def test_prefers_roi_normalized_over_raw_count(self, temp_output_dir, mock_metadata):
+        """When both a raw .count.csv and a .count.roi_normalized.csv exist, the
+        ROI-normalized (properly scaled) variant must win - raw streamline counts
+        are unsuitable for weighted clustering coefficient."""
+        from scripts.small_worldness import find_connectome_files
+
+        data_dir = temp_output_dir / "connectomes"
+        data_dir.mkdir()
+        subj, ses = mock_metadata['participant_id'].iloc[0], mock_metadata['session'].iloc[0]
+        (data_dir / f"{subj}_{ses}.count.csv").write_text("0,0\n0,0\n")
+        (data_dir / f"{subj}_{ses}.count.roi_normalized.csv").write_text("0,0\n0,0\n")
+
+        files = find_connectome_files(str(data_dir), mock_metadata.iloc[[0]])
+
+        assert len(files) == 1
+        assert files[0][2].endswith(".count.roi_normalized.csv")
+
+    def test_falls_back_to_raw_count_when_no_normalized_variant(self, temp_output_dir, mock_metadata):
+        """With only a raw .count.csv present, it should still be found."""
+        from scripts.small_worldness import find_connectome_files
+
+        data_dir = temp_output_dir / "connectomes"
+        data_dir.mkdir()
+        subj, ses = mock_metadata['participant_id'].iloc[0], mock_metadata['session'].iloc[0]
+        (data_dir / f"{subj}_{ses}.count.csv").write_text("0,0\n0,0\n")
+
+        files = find_connectome_files(str(data_dir), mock_metadata.iloc[[0]])
+
+        assert len(files) == 1
+        assert files[0][2].endswith(".count.csv")
+        assert "roi_normalized" not in files[0][2]
+
+
 class TestProcessConnectomeDirectory:
     """Tests for directory processing function."""
 
@@ -254,6 +290,38 @@ class TestProcessConnectomeDirectory:
         )
         
         assert output_file.exists(), "Output file should be created"
+
+    def test_exclude_nodes_rescues_otherwise_disconnected_graph(self, sample_connectome, temp_output_dir, mock_metadata):
+        """A connectome with one always-empty region should still compute a real
+        (non-NaN) sigma once that region is excluded, instead of the whole graph
+        coming back NaN due to infinite characteristic path length."""
+        from scripts.small_worldness import process_connectome_directory
+
+        # Zero out node 5's row/col entirely -> disconnected without exclusion.
+        broken_connectome = sample_connectome.copy()
+        broken_connectome[5, :] = 0
+        broken_connectome[:, 5] = 0
+
+        temp_data_dir = temp_output_dir / "connectomes"
+        temp_data_dir.mkdir()
+        for subj, ses in zip(mock_metadata['participant_id'], mock_metadata['session']):
+            conn_file = temp_data_dir / f"{subj}_{ses}.csv"
+            pd.DataFrame(broken_connectome).to_csv(conn_file, index=False, header=False)
+
+        without_exclusion = process_connectome_directory(
+            str(temp_data_dir), mock_metadata, n_nodes=200,
+            output_dir=str(temp_output_dir / "without"), n_null=5,
+        )
+        assert without_exclusion['small_worldness'].isna().all(), \
+            "Sanity check: without exclusion, the always-empty node should NaN out every subject"
+
+        with_exclusion = process_connectome_directory(
+            str(temp_data_dir), mock_metadata, n_nodes=200,
+            output_dir=str(temp_output_dir / "with"), n_null=5,
+            exclude_nodes=[5],
+        )
+        assert with_exclusion['small_worldness'].notna().all(), \
+            "Excluding the always-empty node should make sigma computable again"
 
 
 # ============================================================================

@@ -100,6 +100,56 @@ def test_process_umap_projection_does_not_emit_turning_points(tmp_path):
     assert set(averages["session"].unique()) == {"ses-1", "ses-2", "ses-3"}
 
 
+def test_compute_subject_trajectories_measures_the_mid_study_turn():
+    """A subject that goes out and comes straight back turns ~180 deg;
+    one that keeps going turns ~0 deg."""
+    from scripts.umap_projection import compute_subject_trajectories
+
+    data = pd.DataFrame({
+        "participant_id": ["r", "r", "r", "s", "s", "s"],
+        "session": ["ses-1", "ses-2", "ses-3"] * 2,
+        "group": ["ctrl"] * 3 + ["g1_2w"] * 3,
+        "umap_1": [0.0, 1.0, 0.0,   0.0, 1.0, 2.0],
+        "umap_2": [0.0, 0.0, 0.0,   0.0, 0.0, 0.0],
+    })
+    traj = compute_subject_trajectories(data)
+
+    reverser = traj[traj["participant_id"] == "r"].iloc[0]
+    straight = traj[traj["participant_id"] == "s"].iloc[0]
+    assert reverser["turn_angle_deg"] == pytest.approx(180.0, abs=1e-6)
+    assert straight["turn_angle_deg"] == pytest.approx(0.0, abs=1e-6)
+    assert straight["path_length"] == pytest.approx(2.0)
+    assert straight["net_displacement"] == pytest.approx(2.0)
+
+
+def test_process_umap_projection_emits_trajectory_outputs(tmp_path):
+    from scripts.umap_projection import process_umap_projection
+
+    rng = np.random.default_rng(1)
+    n = 60
+    df = pd.DataFrame({
+        "participant_id": np.repeat([f"sub-{i:03d}" for i in range(n // 3)], 3),
+        "session": np.tile(["ses-1", "ses-2", "ses-3"], n // 3),
+        "group": np.repeat(["ctrl", "g1_2w", "g2_4w", "g1_4w"], n // 4),
+        "density": rng.random(n),
+        "global_efficiency": rng.random(n),
+        "modularity": rng.random(n),
+    })
+    input_file = tmp_path / "metrics.csv"
+    df.to_csv(input_file, index=False)
+    output_dir = tmp_path / "out"
+
+    process_umap_projection(
+        str(input_file), str(output_dir),
+        timepoint_col="session", group_col="group",
+        n_components=2, n_neighbors=5,
+    )
+
+    traj = pd.read_csv(output_dir / "subject_trajectories.csv")
+    assert {"turn_angle_deg", "path_length", "group"}.issubset(traj.columns)
+    assert (output_dir / "umap_manifold_trajectories.png").exists()
+
+
 # ============================================================================
 # TESTS: run_umap function
 # ============================================================================

@@ -15,7 +15,7 @@ if (!file.exists("renv.lock")) {
 
 required_packages <- c(
   "mgcv", "lme4", "lmerTest", "emmeans", "tidyverse",
-  "jsonlite", "argparse", "R.matlab", "arrow"
+  "jsonlite", "argparse", "R.matlab", "arrow", "lavaan"
 )
 install.packages(required_packages, repos = "https://cloud.r-project.org")
 

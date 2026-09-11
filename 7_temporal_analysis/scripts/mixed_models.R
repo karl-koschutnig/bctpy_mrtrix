@@ -51,6 +51,10 @@ parse_args <- function() {
                      help = "Path to configuration JSON file")
   parser$add_argument("--metric-cols", type = "character", nargs = "+", default = NULL,
                      help = "List of metric columns to model")
+  parser$add_argument("--covariate-cols", type = "character", nargs = "+", default = NULL,
+                     help = "Subject-level covariates to add as additive fixed effects (e.g. age sex)")
+  parser$add_argument("--baseline-adjust", action = "store_true", default = FALSE,
+                     help = "ANCOVA mode: add each subject's first-timepoint value as a covariate and drop the first timepoint")
 
   parser$parse_args()
 }
@@ -90,7 +94,8 @@ load_data <- function(input_file) {
 # DATA PREPARATION
 # ============================================================================
 
-prepare_data <- function(data, timepoint_col, group_col, participant_col, metric_cols = NULL) {
+prepare_data <- function(data, timepoint_col, group_col, participant_col, metric_cols = NULL,
+                         covariate_cols = NULL) {
   data <- data %>%
     mutate(
       !!sym(timepoint_col)   := factor(!!sym(timepoint_col)),
@@ -98,14 +103,38 @@ prepare_data <- function(data, timepoint_col, group_col, participant_col, metric
       !!sym(participant_col) := factor(!!sym(participant_col))
     )
 
+  # character covariates (e.g. sex "M"/"F") become factors so lmer contrasts them
+  for (cv in covariate_cols) {
+    if (cv %in% names(data) && (is.character(data[[cv]]) || is.logical(data[[cv]]))) {
+      data[[cv]] <- factor(data[[cv]])
+    }
+  }
+
+  always_meta <- c(timepoint_col, group_col, participant_col,
+                   "age", "sex", "height_cm", "weight_kg")
   if (is.null(metric_cols)) {
-    metadata_cols <- c(timepoint_col, group_col, participant_col, "age", "sex")
+    metadata_cols <- union(always_meta, covariate_cols)
     metadata_cols <- metadata_cols[metadata_cols %in% names(data)]
     metric_cols <- setdiff(names(data)[sapply(data, is.numeric)], metadata_cols)
   }
+  metric_cols <- setdiff(metric_cols, covariate_cols)
   metric_cols <- metric_cols[sapply(data[metric_cols], is.numeric)]
 
   list(data = data, metric_cols = metric_cols)
+}
+
+
+#' Add a per-subject first-timepoint baseline column for one metric and drop the
+#' baseline rows, so the model becomes an ANCOVA on the post-baseline change.
+add_baseline_covariate <- function(data, metric_name, timepoint_col, participant_col) {
+  base_level <- levels(data[[timepoint_col]])[1]
+  base_vals <- data %>%
+    filter(!!sym(timepoint_col) == base_level) %>%
+    select(!!sym(participant_col), .baseline = !!sym(metric_name))
+  data %>%
+    left_join(base_vals, by = participant_col) %>%
+    filter(!!sym(timepoint_col) != base_level) %>%
+    mutate(!!sym(timepoint_col) := droplevels(!!sym(timepoint_col)))
 }
 
 
@@ -113,10 +142,18 @@ prepare_data <- function(data, timepoint_col, group_col, participant_col, metric
 # FIT MIXED-EFFECTS MODELS
 # ============================================================================
 
-#' Fit metric ~ group * session + (1 | participant) for one metric.
-fit_mixed_model <- function(data, group_col, timepoint_col, participant_col, metric_name) {
+#' Fit metric ~ group * session (+ covariates) + (1 | participant) for one metric.
+fit_mixed_model <- function(data, group_col, timepoint_col, participant_col, metric_name,
+                            covariate_cols = NULL, baseline_adjust = FALSE) {
+  extra <- covariate_cols[covariate_cols %in% names(data)]
+  if (baseline_adjust) {
+    data <- add_baseline_covariate(data, metric_name, timepoint_col, participant_col)
+    extra <- c(".baseline", extra)
+  }
+  rhs <- paste0(group_col, " * ", timepoint_col)
+  if (length(extra)) rhs <- paste0(rhs, " + ", paste(extra, collapse = " + "))
   formula <- as.formula(
-    paste0(metric_name, " ~ ", group_col, " * ", timepoint_col, " + (1 | ", participant_col, ")")
+    paste0(metric_name, " ~ ", rhs, " + (1 | ", participant_col, ")")
   )
   model <- lmerTest::lmer(formula, data = data)
   contrasts <- emmeans::emmeans(
@@ -130,6 +167,7 @@ fit_mixed_model <- function(data, group_col, timepoint_col, participant_col, met
 #' Fit mixed models for all metrics, skipping (with a warning) any that fail to converge
 #' or that don't have enough non-missing data to support a group x session model.
 fit_all_mixed_models <- function(data, group_col, timepoint_col, participant_col, metric_cols,
+                                  covariate_cols = NULL, baseline_adjust = FALSE,
                                   min_obs_per_cell = 2) {
   results <- list()
 
@@ -138,8 +176,9 @@ fit_all_mixed_models <- function(data, group_col, timepoint_col, participant_col
   n_cells <- max(1, nlevels(data[[group_col]]) * nlevels(data[[timepoint_col]]))
   min_obs <- n_cells * min_obs_per_cell
 
+  extra_cols <- covariate_cols[covariate_cols %in% names(data)]
   for (metric in metric_cols) {
-    required_cols <- c(metric, group_col, timepoint_col, participant_col)
+    required_cols <- c(metric, group_col, timepoint_col, participant_col, extra_cols)
     n_complete <- sum(complete.cases(data[required_cols]))
 
     if (n_complete < min_obs) {
@@ -155,7 +194,8 @@ fit_all_mixed_models <- function(data, group_col, timepoint_col, participant_col
 
     cat("Fitting mixed model for:", metric, "...\n")
     result <- tryCatch(
-      fit_mixed_model(data, group_col, timepoint_col, participant_col, metric),
+      fit_mixed_model(data, group_col, timepoint_col, participant_col, metric,
+                      covariate_cols = covariate_cols, baseline_adjust = baseline_adjust),
       error = function(e) {
         warning(paste("Failed to fit mixed model for", metric, ":", e$message))
         NULL
@@ -257,12 +297,20 @@ main <- function() {
   data <- load_data(args$input_file)
   cat("Loaded", nrow(data), "rows\n")
 
-  prepared <- prepare_data(data, args$timepoint_col, args$group_col, args$participant_col, args$metric_cols)
+  covariate_cols <- args$covariate_cols
+  if (!is.null(config$mixed_model$covariate_cols)) covariate_cols <- config$mixed_model$covariate_cols
+
+  prepared <- prepare_data(data, args$timepoint_col, args$group_col, args$participant_col,
+                           args$metric_cols, covariate_cols)
   data <- prepared$data
   metric_cols <- prepared$metric_cols
   cat("Metrics to model:", paste(metric_cols, collapse = ", "), "\n")
+  if (length(covariate_cols)) cat("Covariates:", paste(covariate_cols, collapse = ", "), "\n")
+  if (isTRUE(args$baseline_adjust)) cat("Baseline-adjust (ANCOVA) mode: ON\n")
 
-  results <- fit_all_mixed_models(data, args$group_col, args$timepoint_col, args$participant_col, metric_cols)
+  results <- fit_all_mixed_models(data, args$group_col, args$timepoint_col, args$participant_col,
+                                  metric_cols, covariate_cols = covariate_cols,
+                                  baseline_adjust = isTRUE(args$baseline_adjust))
   save_results(results, args$output_dir, metric_cols)
 
   cat("\n=== MIXED MODEL SUMMARY ===\n")

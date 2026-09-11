@@ -305,12 +305,16 @@ def find_connectome_files(data_dir, metadata, extension='.csv'):
         participant_id = row['participant_id']
         session = row['session']
         
-        # Try different naming patterns
+        # Try different naming patterns, preferring ROI-normalized weights (edges
+        # scaled by the size of the two regions they connect) - raw, unnormalized
+        # streamline counts are unsuitable for weighted clustering coefficient and
+        # produce meaningless (astronomically inflated) small-worldness values.
         patterns = [
+            f"{participant_id}_{session}.count.roi_normalized{extension}",
+            f"{participant_id}_{session}.count.normalized{extension}",
             f"{participant_id}_{session}{extension}",
             f"{participant_id}_{session}.roi_normalized{extension}",
             f"{participant_id}_{session}.count{extension}",
-            f"{participant_id}_{session}.count.roi_normalized{extension}",
         ]
         
         for pattern in patterns:
@@ -322,39 +326,51 @@ def find_connectome_files(data_dir, metadata, extension='.csv'):
     return files
 
 
-def process_connectome_directory(data_dir, metadata, n_nodes=200, output_dir=None, 
-                                  n_null=100, random_state=42):
+def process_connectome_directory(data_dir, metadata, n_nodes=200, output_dir=None,
+                                  n_null=100, random_state=42, exclude_nodes=None):
     """
     Process all connectomes in a directory and calculate small-worldness.
-    
+
     Args:
         data_dir: directory containing connectome CSV files
         metadata: DataFrame with participant_id, session, and other columns
-        n_nodes: expected number of nodes
+        n_nodes: expected number of nodes (of the raw, unexcluded connectome files)
         output_dir: directory to save results (optional)
         n_null: number of null models for small-worldness
         random_state: random seed
-    
+        exclude_nodes: 0-indexed node indices to drop from every connectome before
+            computing metrics (e.g. a region with ~0 streamlines in virtually every
+            subject, which would otherwise make characteristic path length infinite
+            for the whole atlas). Loaded files are still validated against the raw
+            n_nodes; exclusion happens after loading.
+
     Returns:
         results: DataFrame with small-worldness values
     """
+    exclude_nodes = sorted(set(exclude_nodes or []))
+    keep_idx = [i for i in range(n_nodes) if i not in exclude_nodes]
+    expected_after_exclusion = len(keep_idx)
+
     # Find connectome files
     files = find_connectome_files(data_dir, metadata)
-    
+
     if len(files) == 0:
         warnings.warn(f"No connectome files found in {data_dir}")
         return pd.DataFrame()
-    
+
     results = []
     n_disconnected = 0
 
     for participant_id, session, filepath in tqdm(files, desc="Processing connectomes"):
         try:
             W = load_connectome(filepath, n_nodes)
+            if exclude_nodes:
+                W = W[np.ix_(keep_idx, keep_idx)]
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 sigma = calculate_small_worldness(
-                    W, n_null=n_null, random_state=random_state, expected_nodes=n_nodes
+                    W, n_null=n_null, random_state=random_state,
+                    expected_nodes=expected_after_exclusion
                 )
             if any("Disconnected graph" in str(w.message) for w in caught):
                 n_disconnected += 1
@@ -428,14 +444,20 @@ def main():
                         help='Random seed for reproducibility')
     parser.add_argument('--config', type=str, default=None,
                         help='Path to configuration JSON file')
-    
+    parser.add_argument('--exclude-nodes', type=str, default=None,
+                        help='Comma-separated 0-indexed node indices to drop from '
+                             'every connectome before computing metrics (e.g. a '
+                             'region that is essentially never reached by tractography '
+                             'in this atlas, so its presence makes every subject '
+                             'disconnected). Example: --exclude-nodes 128 or --exclude-nodes 16,124,185,287')
+
     args = parser.parse_args()
-    
+
     # Load configuration if provided
     if args.config:
         with open(args.config) as f:
             config = json.load(f)
-        
+
         # Override args with config values
         if 'temporal' in config and 'n_nodes' in config['temporal']:
             args.n_nodes = config['temporal']['n_nodes']
@@ -444,10 +466,14 @@ def main():
                 args.n_null = config['small_worldness']['n_null_models']
             if 'random_state' in config['small_worldness']:
                 args.random_state = config['small_worldness']['random_state']
-    
+
+    exclude_nodes = None
+    if args.exclude_nodes:
+        exclude_nodes = [int(x) for x in args.exclude_nodes.split(',') if x.strip()]
+
     # Load metadata
     metadata = pd.read_csv(args.metadata_file)
-    
+
     # Process connectomes
     results = process_connectome_directory(
         data_dir=args.data_dir,
@@ -455,7 +481,8 @@ def main():
         n_nodes=args.n_nodes,
         output_dir=args.output_dir,
         n_null=args.n_null,
-        random_state=args.random_state
+        random_state=args.random_state,
+        exclude_nodes=exclude_nodes
     )
     
     print(f"Processed {len(results)} connectomes")

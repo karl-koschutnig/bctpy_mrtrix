@@ -1,0 +1,546 @@
+<title>Network Organization Trajectories</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    color-scheme: light;
+    --paper:      #fbfaf7;
+    --surface:    #ffffff;
+    --ink:        #14130f;
+    --ink-2:      #46433c;
+    --ink-muted:  #837f74;
+    --rule:       #ddd9cd;
+    --rule-soft:  #ebe8de;
+    --border:     rgba(20,19,15,0.10);
+    --accent:     #2a5d9f;
+    --accent-wash:#eef3fa;
+    --good:       #0a7d38;
+    --critical:   #b3402f;
+    --slot-1: #2a78d6;
+    --slot-2: #eb6834;
+    --slot-3: #1baf7a;
+    --slot-4: #eda100;
+    --slot-5: #e87ba4;
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --sans:  "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono:  "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper:      #14140f;
+      --surface:    #1c1c18;
+      --ink:        #f6f4ee;
+      --ink-2:      #cbc7bb;
+      --ink-muted:  #908b7e;
+      --rule:       #35342c;
+      --rule-soft:  #28271f;
+      --border:     rgba(246,244,238,0.12);
+      --accent:     #79aae8;
+      --accent-wash:#16202e;
+      --good:       #4cba6d;
+      --critical:   #e2705c;
+      --slot-1: #3987e5;
+      --slot-2: #d95926;
+      --slot-3: #199e70;
+      --slot-4: #c98500;
+      --slot-5: #d55181;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper:      #14140f;
+    --surface:    #1c1c18;
+    --ink:        #f6f4ee;
+    --ink-2:      #cbc7bb;
+    --ink-muted:  #908b7e;
+    --rule:       #35342c;
+    --rule-soft:  #28271f;
+    --border:     rgba(246,244,238,0.12);
+    --accent:     #79aae8;
+    --accent-wash:#16202e;
+    --good:       #4cba6d;
+    --critical:   #e2705c;
+    --slot-1: #3987e5;
+    --slot-2: #d95926;
+    --slot-3: #199e70;
+    --slot-4: #c98500;
+    --slot-5: #d55181;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    padding-inline: 20px;
+    padding-block: 56px 72px;
+  }
+
+  .doc { max-width: 760px; margin-inline: auto; }
+
+  /* ---------- masthead ---------- */
+  .masthead { border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 34px; }
+  .kicker {
+    font-family: var(--sans);
+    font-size: 0.7rem; letter-spacing: 0.13em; text-transform: uppercase;
+    color: var(--ink-muted); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 1.1rem + 1.7vw, 2.05rem);
+    line-height: 1.24;
+    letter-spacing: -0.012em;
+    text-wrap: balance;
+    margin: 0 0 14px;
+  }
+  .byline {
+    font-family: var(--sans); font-size: 0.82rem; color: var(--ink-2);
+    margin: 0; line-height: 1.6;
+  }
+  .byline b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- abstract ---------- */
+  .abstract {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 22px 26px;
+    margin: 0 0 40px;
+  }
+  .abstract h2 {
+    font-family: var(--sans); font-size: 0.7rem; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--ink-muted); font-weight: 600;
+    margin: 0 0 10px; border: 0; padding: 0;
+  }
+  .abstract p { margin: 0 0 10px; font-size: 0.95rem; }
+  .abstract p:last-child { margin-bottom: 0; }
+
+  /* ---------- headings ---------- */
+  h2 {
+    font-family: var(--serif); font-weight: 600;
+    font-size: 1.24rem; letter-spacing: -0.008em;
+    margin: 48px 0 12px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--rule);
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--serif); font-weight: 600;
+    font-size: 1.03rem; margin: 30px 0 8px; text-wrap: balance;
+  }
+  h4 {
+    font-family: var(--sans); font-weight: 600;
+    font-size: 0.82rem; letter-spacing: 0.02em;
+    margin: 22px 0 6px; color: var(--ink);
+  }
+  .secnum { color: var(--ink-muted); font-variant-numeric: tabular-nums; font-weight: 400; }
+
+  p { margin: 0 0 14px; }
+  p, li { color: var(--ink-2); }
+  strong, b { color: var(--ink); font-weight: 600; }
+  em { font-style: italic; }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.855em; }
+  .v { font-family: var(--mono); font-size: 0.86em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---------- tables ---------- */
+  figure { margin: 26px 0; }
+  .tnum {
+    font-family: var(--sans); font-size: 0.7rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  figcaption {
+    font-family: var(--sans); font-size: 0.8rem; line-height: 1.5;
+    color: var(--ink-2); margin-bottom: 10px; max-width: none;
+  }
+  figcaption.below { margin: 10px 0 0; color: var(--ink-muted); }
+  .scroll { overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--sans); font-size: 0.83rem;
+    min-width: 480px;
+  }
+  thead th {
+    text-align: left; font-weight: 600; color: var(--ink);
+    padding: 7px 10px; white-space: nowrap;
+    border-top: 1.5px solid var(--ink);
+    border-bottom: 1px solid var(--rule);
+  }
+  tbody td { padding: 7px 10px; border-bottom: 1px solid var(--rule-soft); color: var(--ink-2); }
+  tbody tr:last-child td { border-bottom: 1.5px solid var(--ink); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 0.95em; }
+  td.grp { color: var(--ink); font-weight: 600; }
+  .sig { color: var(--good); font-weight: 600; }
+  .nsig { color: var(--ink-muted); }
+  .warnval { color: var(--critical); font-weight: 600; }
+
+  /* ---------- callouts ---------- */
+  .note {
+    border-left: 2px solid var(--accent);
+    background: var(--accent-wash);
+    padding: 15px 18px; margin: 22px 0; border-radius: 0 3px 3px 0;
+  }
+  .note p { margin: 0; color: var(--ink); font-size: 0.93rem; }
+  .note p + p { margin-top: 9px; }
+  .note .lbl {
+    display: block; font-family: var(--sans); font-size: 0.68rem;
+    letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;
+    color: var(--accent); margin-bottom: 7px;
+  }
+  .note.caution { border-left-color: var(--critical); background: transparent; border: 1px solid var(--border); border-left: 2px solid var(--critical); }
+  .note.caution .lbl { color: var(--critical); }
+
+  .eq {
+    font-family: var(--mono); font-size: 0.88rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 3px; padding: 14px 18px; margin: 16px 0;
+    text-align: center; color: var(--ink); overflow-x: auto;
+  }
+
+  /* ---------- chart ---------- */
+  .chart-wrap { position: relative; margin: 6px 0; }
+  svg text { font-family: var(--sans); fill: var(--ink-2); }
+  svg .vlab { font-family: var(--mono); font-variant-numeric: tabular-nums; fill: var(--ink); }
+  .hit { cursor: pointer; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0;
+    background: var(--ink); color: var(--paper);
+    font-family: var(--mono); font-size: 0.72rem;
+    padding: 5px 9px; border-radius: 4px; white-space: nowrap;
+    transform: translate(-50%, -135%); transition: opacity .08s ease; z-index: 5;
+  }
+
+  footer {
+    margin-top: 56px; padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--sans); font-size: 0.78rem; color: var(--ink-muted);
+  }
+  footer p { color: var(--ink-muted); }
+
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    table { min-width: 420px; }
+  }
+</style>
+
+<div class="doc">
+
+<header class="masthead">
+  <p class="kicker">Structural connectomics · Study 129 · Analysis report</p>
+  <h1>Structural network trajectories across a two- or four-week solo versus group running intervention</h1>
+  <p class="byline">
+    Whole-brain diffusion connectomes, AAL3 parcellation, three timepoints.<br>
+    <b>125</b> participants · <b>339</b> scans · factorial mixed-effects and latent-growth analysis<br>
+    <span class="v">bctpy_mrtrix / 7_temporal_analysis</span> · compiled 11 September 2026
+  </p>
+</header>
+
+<div class="abstract">
+  <h2>Abstract</h2>
+  <p><b>Background.</b> Aerobic exercise has been reported to shift structural brain networks toward greater integration, but most evidence comes from longer interventions in older or clinical samples. Whether a two- to four-week running programme measurably reorganises white-matter networks in healthy young adults — and whether the <em>social context</em> of that exercise matters — is unresolved.</p>
+  <p><b>Methods.</b> 125 young adults (18–38 y) were allocated to a no-running control arm or to one of four running arms in a 2 × 2 factorial of social context (running alone vs. running in a group) and duration (two vs. four weeks). Diffusion MRI was acquired at three timepoints. Whole-brain connectomes were reconstructed with GQI tractography and parcellated with AAL3. Graph-theoretical measures were reduced by principal component analysis after their redundancy was quantified, and analysed with linear mixed-effects models using four orthogonal planned contrasts crossed with session. Tractography yield, edge-set instability, and multiplicity were addressed by explicit sensitivity analyses.</p>
+  <p><b>Results.</b> <span class="v">[3.4–3.5]</span></p>
+  <p><b>Conclusions.</b> <span class="v">[4]</span></p>
+</div>
+
+<h2><span class="secnum">1</span>&ensp;Introduction</h2>
+
+<p>Physical exercise is among the few behavioural interventions with a reproducible effect on brain structure. Most of that literature concerns grey-matter volume or cerebral perfusion; the evidence that exercise reorganises the <em>white-matter network</em> is thinner, and is drawn largely from interventions lasting months rather than weeks, in older or clinical cohorts where baseline decline leaves more room for change.</p>
+
+<p>Two questions motivate the present analysis. First, whether a short intervention — two to four weeks of running — produces any detectable change in the topology of the structural connectome of healthy young adults, a population in which large change is not expected <em>a priori</em>. Second, and more specifically, whether the <em>social context</em> in which the exercise is performed modifies that change. Running in a group differs from running alone in social contact, in coordination demands, and in adherence; these are candidate modifiers that a purely dose-based account of exercise effects would not predict.</p>
+
+<p>The design allows the second question to be asked cleanly. Comparing any running arm against a control arm that did nothing confounds exercise with everything else that differs between participating in a structured programme and not doing so. Comparing group running against solo running does not: both arms ran, for the same prescribed durations, and differ only in the social manipulation. That contrast is therefore the internally controlled one, and is treated here as the contrast of primary interest.</p>
+
+<p>A third, methodological aim is addressed alongside. Graph-theoretical connectome analyses routinely report a battery of a dozen or more "measures" and treat convergent significance across them as corroboration. This analysis quantifies how much independent information such a battery actually carries, and how much of the leading measure — network density — is attributable to tractography yield rather than to anatomy.</p>
+
+<h2><span class="secnum">2</span>&ensp;Methods</h2>
+
+<h3><span class="secnum">2.1</span>&ensp;Participants and design</h3>
+
+<p>Of 177 enrolled participants, 125 contributed usable diffusion data and a study-arm assignment and form the analysed sample (339 scan sessions). One further participant had connectome data but no recorded arm allocation and was excluded. Participants were young adults aged 18–38 years (mean 24.3, SD 4.7).</p>
+
+<p>Allocation followed a 2 × 2 factorial of <b>social context</b> (running alone; running in a group) and <b>duration</b> (two weeks; four weeks), with an additional no-running control arm (Table 1). Participants in the two-week arms had completed the running programme approximately two weeks before the final scan; participants in the four-week arms ran until shortly before it. Three diffusion scans were acquired per participant (<span class="v">ses-1</span>, <span class="v">ses-2</span>, <span class="v">ses-3</span>). Scan dates were not available to this analysis, so equal inter-scan intervals were assumed throughout.</p>
+
+<figure>
+  <figcaption><span class="tnum">Table 1</span>&ensp;Study arms, sample sizes and baseline characteristics. Arm labels were held blind through data processing and model fitting and decoded only for interpretation.</figcaption>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>Arm</th><th>Social context</th><th>Duration</th><th class="n">n</th><th class="n">Age (mean)</th><th class="n">% female</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="grp">Control</td><td>—</td><td>—</td><td class="n">41</td><td class="n">24.6</td><td class="n">63.4</td></tr>
+        <tr><td class="grp">Solo · 2 w</td><td>Alone</td><td>2 weeks</td><td class="n">25</td><td class="n">23.2</td><td class="n">44.0</td></tr>
+        <tr><td class="grp">Solo · 4 w</td><td>Alone</td><td>4 weeks</td><td class="n">15</td><td class="n">24.8</td><td class="n">53.3</td></tr>
+        <tr><td class="grp">Group · 2 w</td><td>In a group</td><td>2 weeks</td><td class="n">24</td><td class="n">23.8</td><td class="n">70.8</td></tr>
+        <tr><td class="grp">Group · 4 w</td><td>In a group</td><td>4 weeks</td><td class="n">20</td><td class="n">24.5</td><td class="n">60.0</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption class="below">Among the 84 running participants the factorial was balanced for duration across social context (Fisher exact <span class="v">p</span> = 0.51) and for age (<span class="v">p</span> = 0.73). Sex was unevenly distributed across social context (66% female in the group arms vs. 48% in the solo arms) without reaching significance (Fisher exact <span class="v">p</span> = 0.12); sex was therefore retained as a covariate in all models.</figcaption>
+</figure>
+
+<h3><span class="secnum">2.2</span>&ensp;Diffusion MRI and tractography</h3>
+
+<p>Connectomes were reconstructed with the laboratory's DSI&nbsp;Studio pipeline (<a href="https://github.com/MRI-Lab-Graz/dsistuido">MRI-Lab-Graz</a>). Orientation distribution functions were estimated by generalised q-sampling imaging (GQI). Whole-brain deterministic tractography generated 5&nbsp;000&nbsp;000 streamlines per scan, restricted to streamline lengths between 30 and 250&nbsp;mm. Connectivity matrices were assembled by "pass"-type endpoint counting with a relative connectivity threshold of 0.001, i.e. entries below one thousandth of the largest entry were set to zero.</p>
+
+<h3><span class="secnum">2.3</span>&ensp;Network construction</h3>
+
+<p>Nodes were the 166 regions of the AAL3 atlas. Analyses were restricted to this single parcellation. An earlier exploratory pass had examined five atlases in parallel; because all five are derived from the same subjects and the same streamline sets, agreement between them indexes parcellation robustness but does not constitute independent replication, and reporting it as such overstates the evidence. AAL3 was retained as the single <em>a priori</em> parcellation.</p>
+
+<p>Edges were weighted by streamline count normalised by the volumes of the two connected regions (ROI normalisation), which prevents large regions from appearing artefactually over-connected. Two alternatives were considered and rejected: raw streamline counts, whose scale is incompatible with the weighted clustering coefficient and yields uninterpretable magnitudes; and division by the single largest edge, which compresses weighted clustering and local efficiency to implausibly small values because the maximum is frequently an outlier.</p>
+
+<p>One AAL3 region (0-indexed node 128; 8&nbsp;mm³ in the atlas volume table, consistent with a small cerebellar-vermis subdivision) had no streamlines to any other region in 100% of scans, rendering characteristic path length infinite. Because the 30&nbsp;mm minimum-length filter removes essentially all connections of a region a few voxels across, this reflects the interaction of parcellation granularity with tractography settings rather than anatomy. The region was excluded before computing any measure, leaving 165 nodes. No other AAL3 region exceeded a 25% isolation rate.</p>
+
+<h3><span class="secnum">2.4</span>&ensp;Graph-theoretical measures</h3>
+
+<p>Eleven whole-brain measures were computed per scan with the Brain Connectivity Toolbox (<span class="v">bctpy</span>): density, characteristic path length, global efficiency, modularity, core–periphery structure, mean strength, mean local efficiency, mean clustering coefficient, mean betweenness centrality, mean subgraph centrality, and small-worldness. Weighted measures used the ROI-normalised matrix; path length, global efficiency and subgraph centrality were computed on the binarised topology, following the convention of the reference pipeline this analysis adapts.</p>
+
+<p>Three implementation choices differ from that reference pipeline and are stated for reproducibility. Betweenness centrality was computed on a connection-<em>length</em> matrix obtained by inverting non-zero weights, as the toolbox specifies; passing a weight matrix directly, as the reference implementation does, inverts the meaning of the shortest path. Modularity was estimated with the Louvain algorithm (weighted, fixed seed) because the toolbox's Newman implementation fails under the installed NumPy version. Subgraph centrality, which grows exponentially with the largest eigenvalue and spans ten orders of magnitude across scans, was log₁₀-transformed. Two further measures from the reference battery — <span class="v">k</span>-core and <span class="v">s</span>-core size — were dropped because their fixed thresholds were calibrated for a different weight scale and saturate on these denser connectomes.</p>
+
+<p>Small-worldness was computed as σ = (C/C<sub>rand</sub>)/(L/L<sub>rand</sub>) against 100 degree-preserving randomised null networks per scan.</p>
+
+<h3><span class="secnum">2.5</span>&ensp;Redundancy and dimension reduction</h3>
+
+<p>Before modelling, the covariance structure of the eleven measures was examined. Measure batteries of this kind are widely reported as though their elements were separate outcomes; when they are strongly intercorrelated, convergent significance across them is not independent corroboration but the same result restated. The effective number of independent dimensions was estimated as (Σλ)² ⁄ Σλ², where λ are the eigenvalues of the measure correlation matrix.</p>
+
+<p>The battery was then reduced by principal component analysis on <span class="v">z</span>-scored measures across all complete scans. The first three components were retained as the primary outcomes, which fixes the primary test family at three components × four planned contrasts = twelve tests rather than the fifty-odd that testing every measure against every arm would produce.</p>
+
+<h3><span class="secnum">2.6</span>&ensp;Statistical analysis</h3>
+
+<p>The five arms form a factorial design, and were analysed with four orthogonal planned contrasts rather than four arbitrary comparisons against control:</p>
+
+<figure>
+  <figcaption><span class="tnum">Table 2</span>&ensp;Orthogonal contrast coding of the five study arms. Each row is one degree of freedom the design was built to answer.</figcaption>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>Contrast</th><th>Question</th><th class="n">Ctrl</th><th class="n">Solo 2w</th><th class="n">Solo 4w</th><th class="n">Group 2w</th><th class="n">Group 4w</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="grp">Running</td><td>Any running vs. control</td><td class="n">−1</td><td class="n">+0.25</td><td class="n">+0.25</td><td class="n">+0.25</td><td class="n">+0.25</td></tr>
+        <tr><td class="grp">Social context</td><td>Group vs. solo running</td><td class="n">0</td><td class="n">−0.5</td><td class="n">−0.5</td><td class="n">+0.5</td><td class="n">+0.5</td></tr>
+        <tr><td class="grp">Duration</td><td>Four vs. two weeks</td><td class="n">0</td><td class="n">−0.5</td><td class="n">+0.5</td><td class="n">−0.5</td><td class="n">+0.5</td></tr>
+        <tr><td class="grp">Context × duration</td><td>Interaction</td><td class="n">0</td><td class="n">+0.5</td><td class="n">−0.5</td><td class="n">−0.5</td><td class="n">+0.5</td></tr>
+      </tbody>
+    </table>
+  </div>
+</figure>
+
+<p>Each measure was modelled with a linear mixed-effects model with a by-participant random intercept:</p>
+
+<div class="eq">outcome ~ (running + context + duration + context×duration) × session + age + sex + (1 | participant)</div>
+
+<p>Models were fitted with <span class="v">lme4</span>/<span class="v">lmerTest</span> using Satterthwaite degrees of freedom, and Type III <span class="v">F</span> tests were taken for each term. The <b>contrast × session</b> terms carry the intervention effects: an arm difference that is constant across sessions is a pre-existing group difference, whereas a difference that develops across sessions is what an intervention effect looks like. Direction and magnitude were read from a companion model in which session entered as a linear score (0, 1, 2), so that each contrast × time coefficient is a difference in slope per session, reported in units of the outcome's standard deviation.</p>
+
+<p>Within the primary family of twelve tests, <span class="v">p</span>-values were corrected by the Benjamini–Hochberg procedure.</p>
+
+<h3><span class="secnum">2.7</span>&ensp;Sensitivity analyses</h3>
+
+<p>Four sensitivity analyses were pre-specified, each targeting a specific way in which the primary result could be an artefact.</p>
+
+<p><b>Tractography yield.</b> Network density is the proportion of node pairs joined by a surviving edge, and therefore depends on how many streamlines the tractography returned and on where the relative threshold fell. A group difference in yield would present as a group difference in density. Every model was refitted with the scan's total raw streamline count as an additional covariate.</p>
+
+<p><b>Fixed edge set.</b> To remove yield as a mechanism entirely, a consistency-thresholded backbone was constructed comprising the edges present in at least 75% of all scans. This edge set is identical for every participant and session, so density is constant by construction and only edge <em>weights</em> can vary. Measures recomputed on the backbone isolate change in connection strength from change in which connections were detected.</p>
+
+<p><b>Permutation inference.</b> With 15–41 participants per arm, the asymptotic reference distribution of the <span class="v">F</span> statistic is not guaranteed. An exact reference distribution was built by permuting arm labels between participants — preserving each participant's within-subject trajectory intact — and refitting the primary models 2000 times.</p>
+
+<p><b>Baseline dependence.</b> To distinguish an intervention effect from regression toward the mean in an arm that happened to start low, models were also refitted as an analysis of covariance on the post-baseline sessions with each participant's baseline value as a covariate.</p>
+
+<h2><span class="secnum">3</span>&ensp;Results</h2>
+
+<h3><span class="secnum">3.1</span>&ensp;Network construction and data quality</h3>
+
+<p>All 339 scans yielded a connectome. After exclusion of the isolated region, 5.3% of scans still returned an undefined characteristic path length owing to a sporadically disconnected node, and were dropped listwise from the measures affected; density, strength and clustering are defined regardless and retained the full sample.</p>
+
+<figure>
+  <figcaption><span class="tnum">Figure 1</span>&ensp;Association between network density and raw tractography yield across all 339 scans. Density — the proportion of region pairs joined by a surviving edge — tracks the total number of reconstructed streamlines, meaning that a substantial share of its between-scan variance is methodological rather than anatomical.</figcaption>
+  <div class="chart-wrap">
+    <svg id="fig-yield" viewBox="0 0 720 300" role="img" aria-label="Correlations of network density with tractography yield measures"></svg>
+    <div class="tip" id="tip-yield"></div>
+  </div>
+</figure>
+
+<p>Density correlated <span class="v">r</span> = 0.61 with the total raw streamline count of the same scan and <span class="v">r</span> = 0.70 with mean ROI-normalised strength; that is, roughly 37% of the between-scan variance in density is shared with a purely methodological quantity. Density was essentially uncorrelated with the single largest raw edge (<span class="v">r</span> = −0.05), confirming that the dependency runs through overall yield rather than through the relative threshold's anchor. This motivated the yield covariate and the fixed-edge-set backbone described in §2.7.</p>
+
+<p>Edge presence was highly variable across scans. Only 130 of the 13&nbsp;530 possible connections (1.0%) were present in every scan, whereas 2461 (18.2%) were present in at least half. The backbone used for sensitivity analysis — edges present in at least 75% of scans — comprised <b>1629 edges</b> (12.0% of possible).</p>
+
+<figure>
+  <figcaption><span class="tnum">Table 3</span>&ensp;Edge-set stability across the 339 scans, by consistency threshold.</figcaption>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Edge present in at least…</th><th class="n">Edges</th><th class="n">% of possible pairs</th></tr></thead>
+      <tbody>
+        <tr><td>50% of scans</td><td class="n">2461</td><td class="n">18.2</td></tr>
+        <tr><td>75% of scans <span class="nsig">(backbone)</span></td><td class="n">1629</td><td class="n">12.0</td></tr>
+        <tr><td>90% of scans</td><td class="n">1137</td><td class="n">8.4</td></tr>
+        <tr><td>100% of scans</td><td class="n">130</td><td class="n">1.0</td></tr>
+      </tbody>
+    </table>
+  </div>
+</figure>
+
+<h3><span class="secnum">3.2</span>&ensp;The measure battery carries about three dimensions</h3>
+
+<p>The eleven whole-brain measures were far from independent (Figure 2). Density, global efficiency, path length and subgraph centrality formed a single tightly coupled cluster (|<span class="v">r</span>| = 0.94–0.99 among all pairs); mean clustering coefficient and mean local efficiency were <em>perfectly</em> collinear (<span class="v">r</span> = 1.00); and small-worldness correlated <span class="v">r</span> = 0.95 with both.</p>
+
+<figure>
+  <figcaption><span class="tnum">Figure 2</span>&ensp;Eigenvalue spectrum of the eleven-measure correlation matrix. The battery's effective dimensionality is 2.95, not eleven: the first component alone accounts for 47.6% of the variance and the first two for 78.8%.</figcaption>
+  <div class="chart-wrap">
+    <svg id="fig-scree" viewBox="0 0 720 280" role="img" aria-label="Scree plot of the measure correlation matrix eigenvalues"></svg>
+    <div class="tip" id="tip-scree"></div>
+  </div>
+</figure>
+
+<p>The effective number of independent dimensions was <b>2.95</b> out of a nominal eleven. Reporting convergent effects on density, global efficiency, path length and subgraph centrality as four mutually supporting findings therefore restates one finding four times. The three retained principal components are interpreted in §3.3 and serve as the primary outcomes.</p>
+
+<h3><span class="secnum">3.3</span>&ensp;Component structure</h3>
+
+<p>The three retained components accounted for 88.6% of the variance in the battery (47.6%, 31.1% and 9.9%) and separated cleanly into interpretable axes (Table 4). Component signs, which are arbitrary in principal component analysis, were oriented so that higher scores denote more of the named property.</p>
+
+<figure>
+  <figcaption><span class="tnum">Table 4</span>&ensp;Principal component loadings of the eleven whole-brain measures. Loadings with |value| ≥ 0.25 are shown in bold; signs are reported after orientation.</figcaption>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>Measure</th><th class="n">PC1 · Integration</th><th class="n">PC2 · Segregation</th><th class="n">PC3 · Centralisation</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Density</td><td class="n"><b>+0.43</b></td><td class="n">−0.05</td><td class="n">−0.04</td></tr>
+        <tr><td>Global efficiency</td><td class="n"><b>+0.43</b></td><td class="n">−0.07</td><td class="n">−0.07</td></tr>
+        <tr><td>Subgraph centrality (log₁₀)</td><td class="n"><b>+0.42</b></td><td class="n">−0.07</td><td class="n">−0.01</td></tr>
+        <tr><td>Characteristic path length</td><td class="n"><b>−0.42</b></td><td class="n">+0.09</td><td class="n">+0.10</td></tr>
+        <tr><td>Mean strength</td><td class="n"><b>+0.36</b></td><td class="n"><b>+0.29</b></td><td class="n">+0.01</td></tr>
+        <tr><td>Modularity</td><td class="n"><b>−0.28</b></td><td class="n">−0.11</td><td class="n"><b>−0.35</b></td></tr>
+        <tr><td>Mean local efficiency</td><td class="n">−0.07</td><td class="n"><b>+0.53</b></td><td class="n">−0.14</td></tr>
+        <tr><td>Mean clustering coefficient</td><td class="n">−0.08</td><td class="n"><b>+0.53</b></td><td class="n">−0.13</td></tr>
+        <tr><td>Small-worldness σ</td><td class="n">+0.06</td><td class="n"><b>+0.52</b></td><td class="n">−0.17</td></tr>
+        <tr><td>Mean betweenness centrality</td><td class="n">−0.20</td><td class="n">+0.04</td><td class="n"><b>+0.65</b></td></tr>
+        <tr><td>Core–periphery structure</td><td class="n">+0.18</td><td class="n"><b>+0.24</b></td><td class="n"><b>+0.61</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+</figure>
+
+<p><b>PC1 (integration, 47.6%)</b> contrasts density, global efficiency and subgraph centrality against characteristic path length and modularity: a densely connected, short-path, weakly modular network scores high. <b>PC2 (segregation, 31.1%)</b> is defined almost entirely by clustering coefficient, local efficiency and small-worldness, which load on it at 0.52–0.53 and essentially nowhere else. <b>PC3 (centralisation, 9.9%)</b> carries betweenness centrality and core–periphery structure against modularity — networks whose traffic concentrates on a small core.</p>
+
+<p>The decomposition makes the redundancy concrete. The four measures on which the exploratory analysis had reported convergent effects — density, global efficiency, subgraph centrality and path length — are the four highest-loading measures of a <em>single</em> component, with no appreciable loading on either of the others. They were never four findings.</p>
+
+<h3><span class="secnum">3.4</span>&ensp;Factorial effects on network trajectories</h3>
+
+<p><span class="v">[Primary factorial results — pending]</span></p>
+
+<h3><span class="secnum">3.5</span>&ensp;Sensitivity analyses</h3>
+
+<p><span class="v">[Yield-adjusted, backbone, permutation, baseline-adjusted — pending]</span></p>
+
+<h2><span class="secnum">4</span>&ensp;Discussion</h2>
+
+<p><span class="v">[Pending results]</span></p>
+
+<footer>
+  <p><b>Data and code.</b> Analysis code is in <span class="v">7_temporal_analysis/scripts/</span> of the <span class="v">bctpy_mrtrix</span> repository; the AAL3 re-analysis is reproduced by <span class="v">aal3_prepare.py</span> followed by <span class="v">aal3_models.R</span>. Participant-level data and derived measures are not distributed with the repository. Reported values derive from the analysis tables under <span class="v">outputs/aal3_reanalysis/</span>.</p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const txt = (x, y, s, a) => { const t = el("text", Object.assign({ x, y }, a)); t.textContent = s; return t; };
+
+  function tip(svg, tipEl, hits) {
+    hits.forEach(({ node, label }) => {
+      node.addEventListener("mousemove", (ev) => {
+        const r = svg.parentElement.getBoundingClientRect();
+        tipEl.style.left = (ev.clientX - r.left) + "px";
+        tipEl.style.top = (ev.clientY - r.top) + "px";
+        tipEl.textContent = label; tipEl.style.opacity = 1;
+      });
+      node.addEventListener("mouseleave", () => { tipEl.style.opacity = 0; });
+    });
+  }
+
+  // Figure 1 — density vs yield correlations
+  (function () {
+    const data = [
+      { k: "Total streamline count", r: 0.608 },
+      { k: "Mean ROI-normalised strength", r: 0.698 },
+      { k: "Largest single raw edge", r: -0.048 },
+    ];
+    const svg = document.getElementById("fig-yield");
+    const W = 720, H = 300, left = 250, right = 54, top = 30, bot = 44;
+    const pw = W - left - right, rowH = (H - top - bot) / data.length;
+    const x = v => left + ((v + 1) / 2) * pw;
+
+    [-1, -0.5, 0, 0.5, 1].forEach(g => {
+      const zero = g === 0;
+      svg.appendChild(el("line", { x1: x(g), x2: x(g), y1: top, y2: H - bot,
+        stroke: zero ? "var(--ink-muted)" : "var(--rule)", "stroke-width": zero ? 1.4 : 1 }));
+      svg.appendChild(txt(x(g), H - bot + 20, g.toFixed(1), { "font-size": 11, "text-anchor": "middle", fill: "var(--ink-muted)" }));
+    });
+    svg.appendChild(txt(left + pw / 2, H - 8, "Pearson correlation with network density", { "font-size": 11, "text-anchor": "middle", fill: "var(--ink-muted)" }));
+
+    const hits = [];
+    data.forEach((d, i) => {
+      const cy = top + i * rowH + rowH / 2;
+      svg.appendChild(txt(left - 16, cy + 4, d.k, { "font-size": 12, "text-anchor": "end", fill: "var(--ink)" }));
+      const x0 = x(0), x1 = x(d.r);
+      const bar = el("rect", { x: Math.min(x0, x1), y: cy - 9, width: Math.max(Math.abs(x1 - x0), 2),
+        height: 18, rx: 3, fill: d.r < 0 ? "var(--ink-muted)" : "var(--slot-1)", class: "hit" });
+      svg.appendChild(bar);
+      svg.appendChild(txt(x1 + (d.r < 0 ? -8 : 8), cy + 4, d.r.toFixed(2),
+        { "font-size": 11.5, class: "vlab", "text-anchor": d.r < 0 ? "end" : "start" }));
+      hits.push({ node: bar, label: `${d.k}: r = ${d.r.toFixed(3)}` });
+    });
+    tip(svg, document.getElementById("tip-yield"), hits);
+  })();
+
+  // Figure 2 — scree
+  (function () {
+    const ev = [5.24, 3.42, 1.09, 0.68, 0.41, 0.08, 0.06, 0.02, 0.0, 0.0, 0.0];
+    const tot = ev.reduce((a, b) => a + b, 0);
+    const svg = document.getElementById("fig-scree");
+    const W = 720, H = 280, left = 56, right = 24, top = 26, bot = 46;
+    const pw = W - left - right, ph = H - top - bot;
+    const bw = pw / ev.length - 10;
+    const maxV = 5.6;
+    const y = v => top + ph - (v / maxV) * ph;
+
+    [0, 1, 2, 3, 4, 5].forEach(g => {
+      svg.appendChild(el("line", { x1: left, x2: W - right, y1: y(g), y2: y(g),
+        stroke: g === 1 ? "var(--ink-muted)" : "var(--rule)", "stroke-width": 1,
+        "stroke-dasharray": g === 1 ? "4,3" : "none" }));
+      svg.appendChild(txt(left - 10, y(g) + 4, String(g), { "font-size": 11, "text-anchor": "end", fill: "var(--ink-muted)" }));
+    });
+    svg.appendChild(txt(14, top + ph / 2, "Eigenvalue", { "font-size": 11, "text-anchor": "middle", fill: "var(--ink-muted)", transform: `rotate(-90 14 ${top + ph / 2})` }));
+    svg.appendChild(txt(left + pw / 2, H - 8, "Principal component", { "font-size": 11, "text-anchor": "middle", fill: "var(--ink-muted)" }));
+
+    const hits = [];
+    ev.forEach((v, i) => {
+      const bx = left + i * (pw / ev.length) + 5;
+      const h = Math.max((H - bot) - y(v), 1.5);
+      const rect = el("rect", { x: bx, y: y(v), width: bw, height: h, rx: 2,
+        fill: i < 3 ? "var(--slot-1)" : "var(--rule)", class: "hit" });
+      svg.appendChild(rect);
+      if (i < 3) svg.appendChild(txt(bx + bw / 2, y(v) - 7, (v / tot * 100).toFixed(0) + "%",
+        { "font-size": 10.5, class: "vlab", "text-anchor": "middle" }));
+      svg.appendChild(txt(bx + bw / 2, H - bot + 17, String(i + 1),
+        { "font-size": 10.5, "text-anchor": "middle", fill: "var(--ink-muted)" }));
+      hits.push({ node: rect, label: `PC${i + 1}: eigenvalue ${v.toFixed(2)} (${(v / tot * 100).toFixed(1)}% of variance)` });
+    });
+    svg.appendChild(el("line", { x1: left, x2: left, y1: top, y2: H - bot, stroke: "var(--ink)", "stroke-width": 1.2 }));
+    svg.appendChild(el("line", { x1: left, x2: W - right, y1: H - bot, y2: H - bot, stroke: "var(--ink)", "stroke-width": 1.2 }));
+    tip(svg, document.getElementById("tip-scree"), hits);
+  })();
+})();
+</script>

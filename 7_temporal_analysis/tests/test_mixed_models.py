@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def sample_metrics_csv(tmp_path):
-    """20 subjects x 3 sessions across 5 study-arm labels."""
+    """20 subjects x 3 sessions across 5 study-arm labels, with age/sex."""
     rng = np.random.default_rng(42)
     groups = ["ctrl", "g1_2w", "g1_4w", "g2_2w", "g2_4w"]
     rows = []
@@ -32,11 +32,15 @@ def sample_metrics_csv(tmp_path):
         participant = f"sub-{i:03d}"
         group = groups[i % len(groups)]
         baseline = rng.normal(0.3, 0.05)
+        age = rng.integers(18, 39)
+        sex = "MF"[i % 2]
         for session_idx, session in enumerate(["ses-1", "ses-2", "ses-3"]):
             rows.append({
                 "participant_id": participant,
                 "session": session,
                 "group": group,
+                "age": age,
+                "sex": sex,
                 "density": baseline + 0.01 * session_idx + rng.normal(0, 0.01),
                 "global_efficiency": baseline * 2 + rng.normal(0, 0.02),
             })
@@ -91,3 +95,31 @@ def test_mixed_models_writes_emmeans_contrasts(sample_metrics_csv, tmp_path):
     contrasts = pd.read_csv(contrasts_path)
     assert "contrast" in contrasts.columns
     assert set(contrasts["metric"].unique()) == {"density", "global_efficiency"}
+
+
+def test_covariate_cols_add_age_sex_terms_and_exclude_them_as_metrics(sample_metrics_csv, tmp_path):
+    output_dir = tmp_path / "outputs"
+    result = subprocess.run(
+        ["Rscript", str(SCRIPT_PATH), "--input-file", str(sample_metrics_csv),
+         "--output-dir", str(output_dir), "--group-col", "group",
+         "--participant-col", "participant_id", "--covariate-cols", "age", "sex"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    stats = pd.read_csv(output_dir / "mixed_model_statistics.csv")
+    assert {"age", "sex"}.issubset(set(stats["term"]))
+    # age/sex must not be modelled as outcomes
+    assert set(stats["metric"].unique()) == {"density", "global_efficiency"}
+
+
+def test_baseline_adjust_drops_first_session_and_adds_baseline_term(sample_metrics_csv, tmp_path):
+    output_dir = tmp_path / "outputs"
+    result = subprocess.run(
+        ["Rscript", str(SCRIPT_PATH), "--input-file", str(sample_metrics_csv),
+         "--output-dir", str(output_dir), "--group-col", "group",
+         "--participant-col", "participant_id", "--baseline-adjust"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    stats = pd.read_csv(output_dir / "mixed_model_statistics.csv")
+    assert ".baseline" in set(stats["term"])

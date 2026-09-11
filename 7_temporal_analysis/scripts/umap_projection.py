@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """
-UMAP Projection and Turning Point Detection
-===========================================
+UMAP Projection and Multi-Metric Trajectory Analysis
+====================================================
 
-Perform UMAP dimensionality reduction on network metrics to visualize
-network state trajectories across timepoints.
+Condense the full organizational-measure battery into a single 2D manifold
+(à la Mousley et al.) and read each group's network-state trajectory across
+the three study timepoints.
 
 This script:
 1. Loads network metrics (density, efficiency, etc.) from CSV/parquet
-2. Performs UMAP dimensionality reduction
-3. Detects turning points in the trajectory
-4. Saves UMAP coordinates and visualizations
+2. Performs UMAP dimensionality reduction on all measures at once
+3. Draws one manifold with every group's mean trajectory (ses1->ses2->ses3)
+4. Per subject, measures the mid-study "turn" at ses-2 (angle between the
+   ses1->ses2 and ses2->ses3 displacement vectors) and tests it by group.
+   With only 3 timepoints a trajectory has exactly one interior angle, so
+   the source paper's multi-turning-point curve fitting does not transfer -
+   this is its scaled-down analogue.
+5. Saves UMAP coordinates and visualizations
 
 Usage:
     python 02_umap_projection.py --input-file metrics.csv --output-dir outputs/umap --timepoint-col session
@@ -65,6 +71,13 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
+
+# Optional scipy for the turn-angle group tests
+try:
+    from scipy import stats as scipy_stats
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
 
 
 # ============================================================================
@@ -220,6 +233,129 @@ def detect_turning_points(embedding, gradient_threshold=0.8):
     return turning_indices
 
 
+def compute_subject_trajectories(data, participant_col='participant_id',
+                                 timepoint_col='session', group_col='group',
+                                 umap_cols=('umap_1', 'umap_2')):
+    """
+    Per subject, walk the UMAP trajectory through its ordered timepoints and
+    measure how sharply it turns.
+
+    For a subject with k ordered points there are k-2 interior angles; with
+    the study's 3 timepoints that is exactly one, the turn at ses-2. Angle
+    0 = the network kept moving the same direction; angle pi = it fully
+    reversed.
+
+    Returns one row per subject that has >= 3 timepoints present:
+        participant, group, n_timepoints, seg_len_mean, path_length,
+        net_displacement, turn_angle_rad, turn_angle_deg
+    """
+    umap_cols = list(umap_cols)
+    rows = []
+    for pid, sub in data.groupby(participant_col):
+        sub = sub.sort_values(timepoint_col)
+        pts = sub[umap_cols].to_numpy(dtype=float)
+        if len(pts) < 3:
+            continue
+        diffs = np.diff(pts, axis=0)
+        seg_lens = np.linalg.norm(diffs, axis=1)
+        angles = []
+        for i in range(len(diffs) - 1):
+            n1, n2 = seg_lens[i], seg_lens[i + 1]
+            if n1 > 0 and n2 > 0:
+                cos_a = np.dot(diffs[i], diffs[i + 1]) / (n1 * n2)
+                angles.append(np.arccos(np.clip(cos_a, -1.0, 1.0)))
+        if not angles:
+            continue
+        turn = float(np.mean(angles))
+        rows.append({
+            participant_col: pid,
+            group_col: sub[group_col].iloc[0],
+            "n_timepoints": len(pts),
+            "seg_len_mean": float(np.mean(seg_lens)),
+            "path_length": float(np.sum(seg_lens)),
+            "net_displacement": float(np.linalg.norm(pts[-1] - pts[0])),
+            "turn_angle_rad": turn,
+            "turn_angle_deg": float(np.degrees(turn)),
+        })
+    return pd.DataFrame(rows)
+
+
+def test_trajectory_by_group(traj, group_col='group',
+                             measures=('turn_angle_deg', 'path_length', 'net_displacement')):
+    """
+    One-way group comparison (Kruskal-Wallis + one-way ANOVA) for each
+    trajectory measure. Returns a tidy DataFrame; empty if scipy is missing
+    or fewer than two groups have >= 2 subjects.
+    """
+    if not SCIPY_AVAILABLE or traj.empty:
+        return pd.DataFrame()
+    out = []
+    for m in measures:
+        groups = [g[m].dropna().to_numpy() for _, g in traj.groupby(group_col)]
+        groups = [g for g in groups if len(g) >= 2]
+        if len(groups) < 2:
+            continue
+        kw_h, kw_p = scipy_stats.kruskal(*groups)
+        f_stat, f_p = scipy_stats.f_oneway(*groups)
+        out.append({
+            "measure": m, "n_groups": len(groups),
+            "kruskal_H": float(kw_h), "kruskal_p": float(kw_p),
+            "anova_F": float(f_stat), "anova_p": float(f_p),
+        })
+    return pd.DataFrame(out)
+
+
+def plot_manifold_trajectories(data, averages, umap_cols=('umap_1', 'umap_2'),
+                               group_col='group', timepoint_col='session',
+                               output_path=None):
+    """
+    One manifold: every subject-session as a faint point, plus each group's
+    mean trajectory drawn as a connected path through the ordered timepoints.
+    """
+    if not MATPLOTLIB_AVAILABLE:
+        warnings.warn("Matplotlib not available, skipping manifold plot")
+        return
+    x, y = list(umap_cols)
+    groups = list(averages[group_col].unique())
+    palette = sns.color_palette('husl', len(groups))
+
+    def draw(ax):
+        ax.scatter(data[x], data[y], s=12, c='0.8', alpha=0.5, linewidths=0, zorder=1)
+        for gi, gval in enumerate(groups):
+            gdf = averages[averages[group_col] == gval].sort_values(timepoint_col)
+            gx, gy = gdf[x].to_numpy(), gdf[y].to_numpy()
+            ax.plot(gx, gy, '-o', color=palette[gi], lw=2, ms=9,
+                    label=str(gval), zorder=3)
+            for j in range(len(gx) - 1):
+                ax.annotate('', xy=(gx[j + 1], gy[j + 1]), xytext=(gx[j], gy[j]),
+                            arrowprops=dict(arrowstyle='-|>', color=palette[gi], lw=2),
+                            zorder=3)
+            ax.text(gx[0], gy[0], f' {gval}', color=palette[gi], fontsize=9,
+                    va='center', zorder=4)
+        ax.set_xlabel(f'UMAP {x}')
+        ax.set_ylabel(f'UMAP {y}')
+
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(18, 9))
+    draw(ax0)
+    ax0.set_title('Full manifold (all subject-sessions)')
+    ax0.legend(title=group_col, fontsize=8)
+    draw(ax1)
+    # zoom the second panel to the group-trajectory extent + 20% margin
+    tx, ty = averages[x].to_numpy(), averages[y].to_numpy()
+    mx = 0.2 * (tx.max() - tx.min() or 1.0)
+    my = 0.2 * (ty.max() - ty.min() or 1.0)
+    ax1.set_xlim(tx.min() - mx, tx.max() + mx)
+    ax1.set_ylim(ty.min() - my, ty.max() + my)
+    ax1.set_title('Zoom: mean trajectory per group (ses1 -> ses2 -> ses3)')
+    fig.suptitle('Multi-metric network manifold', fontsize=14)
+    fig.tight_layout()
+    if output_path:
+        fig.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.close(fig)
+    else:
+        plt.show()
+
+
 def plot_umap_trajectory(data, umap_cols=['umap_1', 'umap_2'], color_col=None,
                           output_path=None, show_labels=True):
     """
@@ -354,7 +490,8 @@ def plot_timepoint_averages(averages, umap_cols=['umap_1', 'umap_2'],
 
 def process_umap_projection(input_file, output_dir, timepoint_col='session',
                            group_col=None, metric_cols=None, n_components=2, n_neighbors=15,
-                           min_dist=0.1, random_state=42, color_col=None):
+                           min_dist=0.1, random_state=42, color_col=None,
+                           participant_col='participant_id'):
     """
     Main processing function for UMAP projection.
 
@@ -444,6 +581,26 @@ def process_umap_projection(input_file, output_dir, timepoint_col='session',
     averages_file = output_dir / "umap_group_timepoint_averages.csv"
     averages.to_csv(averages_file, index=False)
 
+    # Multi-metric trajectory condensation: per-subject mid-study turn angle
+    # + group tests (see module docstring). Needs a group and participant col.
+    umap_cols = [f'umap_{i+1}' for i in range(min(2, n_components))]
+    traj = pd.DataFrame()
+    if group_col and participant_col in data.columns and group_col in data.columns:
+        traj = compute_subject_trajectories(
+            data, participant_col=participant_col, timepoint_col=timepoint_col,
+            group_col=group_col, umap_cols=umap_cols,
+        )
+        if not traj.empty:
+            traj.to_csv(output_dir / "subject_trajectories.csv", index=False)
+            tests = test_trajectory_by_group(traj, group_col=group_col)
+            if not tests.empty:
+                tests.to_csv(output_dir / "trajectory_turn_tests.csv", index=False)
+        plot_manifold_trajectories(
+            data, averages, umap_cols=umap_cols, group_col=group_col,
+            timepoint_col=timepoint_col,
+            output_path=output_dir / "umap_manifold_trajectories.png",
+        )
+
     # Create visualizations
     if MATPLOTLIB_AVAILABLE:
         # Plot all points
@@ -492,6 +649,8 @@ def main():
                         help='Column name for timepoints')
     parser.add_argument('--group-col', type=str, default='group',
                         help='Column name for groups (for coloring)')
+    parser.add_argument('--participant-col', type=str, default='participant_id',
+                        help='Column name for participant IDs (trajectory analysis)')
     parser.add_argument('--n-components', type=int, default=2,
                         help='Number of UMAP dimensions')
     parser.add_argument('--n-neighbors', type=int, default=15,
@@ -529,6 +688,7 @@ def main():
         timepoint_col=args.timepoint_col,
         group_col=args.group_col,
         color_col=args.group_col,
+        participant_col=args.participant_col,
         n_components=args.n_components,
         n_neighbors=args.n_neighbors,
         min_dist=args.min_dist,
